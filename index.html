@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Конструктор робо-руки</title>
+<style>
+  :root {
+    --bg: #14171c;
+    --panel: #1d222a;
+    --panel2: #232a34;
+    --border: #313a47;
+    --text: #e6ebf2;
+    --muted: #8b97a8;
+    --accent: #4da3ff;
+    --danger: #ff5c5c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "toolbar  sidebar"
+      "viewport sidebar";
+    height: 100vh;
+    overflow: hidden;
+  }
+  #viewport { grid-area: viewport; position: relative; min-width: 0; min-height: 0; }
+  #viewport canvas { display: block; }
+  #hint {
+    position: absolute; left: 12px; bottom: 10px;
+    color: var(--muted); font-size: 12px; pointer-events: none;
+  }
+
+  /* ---- Правая панель ---- */
+  #sidebar {
+    grid-area: sidebar;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  #sidebar h1 {
+    font-size: 15px; font-weight: 600;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  #addRow {
+    grid-area: toolbar;
+    background: var(--panel);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  }
+  #addRow button {
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; cursor: pointer; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ico { flex: none; display: inline-block; vertical-align: -3px; }
+  #addRow button:hover { filter: brightness(1.25); }
+  #genRow {
+    display: flex; align-items: center; gap: 10px; margin: 10px 14px 0;
+  }
+  #btnGenerate {
+    flex: 1;
+    background: linear-gradient(135deg, #2b6cb0, #4da3ff); color: #fff;
+    border: none; border-radius: 8px; padding: 8px 12px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  #btnGenerate:hover { filter: brightness(1.15); }
+  #genRow label {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap;
+  }
+  #genRow input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  /* ---- Вкладки: Состав | JSON | BOM ---- */
+  #tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-top: 10px;
+  }
+  #tabs button {
+    flex: 1; background: none; color: var(--muted);
+    border: none; border-bottom: 2px solid transparent;
+    padding: 7px 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #tabs button:hover { color: var(--text); }
+  #tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabpane { display: none; }
+  .tabpane.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  #components {
+    overflow-y: auto; padding: 10px 12px;
+    gap: 8px;
+  }
+  .comp {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .comp-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .comp-head .num {
+    width: 24px; height: 24px; border-radius: 7px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 13px; color: #10141a;
+  }
+  .comp-head .name { font-weight: 600; flex: 1; }
+  #orderNote { color: var(--muted); font-size: 11px; padding: 0 2px 2px; }
+  .comp-head .del {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 4px;
+  }
+  .comp-head .zone-toggle { accent-color: var(--accent); cursor: pointer; width: 15px; height: 15px; }
+  .comp-head .zone-lbl {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--muted); cursor: pointer; white-space: nowrap;
+  }
+  .comp-head .del:hover { color: var(--danger); background: rgba(255,92,92,.12); }
+  .ctrl { display: grid; grid-template-columns: 1fr 52px; gap: 8px; align-items: center; margin-top: 4px; }
+  .ctrl label { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+  .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ctrl .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--accent); }
+  #empty { color: var(--muted); text-align: center; padding: 24px 10px; font-size: 13px; }
+
+  /* ---- BOM: таблица закупки ---- */
+  #bom {
+    overflow-y: auto;
+    padding: 8px 12px 12px;
+  }
+  #bom h2 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  #armName {
+    font-size: 13.5px; font-weight: 700; color: var(--accent);
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 7px;
+    padding: 6px 10px; margin: 4px 0 6px;
+  }
+  #armName .en { display: block; font-weight: 500; font-size: 11px; color: var(--muted); }
+  #bom .note { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  #bomTable { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  #bomTable th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    padding: 3px 4px; border-bottom: 1px solid var(--border);
+  }
+  #bomTable td { padding: 3px 4px; border-bottom: 1px solid rgba(49,58,71,.45); vertical-align: top; }
+  #bomTable th.num, #bomTable td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #bomTable .en { color: var(--muted); font-size: 10.5px; }
+  #bomTable tr.total td {
+    border-bottom: none; border-top: 2px solid var(--border);
+    font-weight: 700; color: var(--accent); font-size: 12.5px; padding-top: 5px;
+  }
+
+  /* ---- JSON под 3D-окном ---- */
+  #jsonarea { background: var(--panel); }
+  #jsonbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-bottom: 1px solid var(--border);
+  }
+  #jsonbar .title { font-weight: 600; font-size: 13px; flex: 1; }
+  #jsonbar button {
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 12px; cursor: pointer; font-size: 13px;
+  }
+  #jsonbar button:hover { border-color: var(--accent); color: var(--accent); }
+  #jsonbar { flex-wrap: wrap; }
+  #jsonStatus { font-size: 12px; color: var(--muted); min-width: 0; text-align: right; }
+  #jsonStatus.ok { color: #57d98a; }
+  #jsonStatus.err { color: var(--danger); }
+  #jsonText {
+    flex: 1; resize: none; border: none; outline: none;
+    background: var(--bg); color: #b9e3a6;
+    font: 12px/1.5 Consolas, "Courier New", monospace;
+    padding: 10px 12px; white-space: pre; overflow: auto;
+  }
+</style>
+</head>
+<body>
+
+<div id="addRow"></div>
+
+<div id="viewport"><div id="hint">LMB — rotate (вращение) · wheel — zoom (зум) · RMB — pan (панорама)</div></div>
+
+<div id="sidebar">
+  <h1>🦾 Robo-Arm Builder (Конструктор робо-руки)</h1>
+  <div id="genRow">
+    <button id="btnGenerate">🎲 Generate Arm (случайная рука)</button>
+    <label title="Auto Animate (авто-анимация суставов)"><input type="checkbox" id="chkAnimate" checked>Auto<br>Animate</label>
+  </div>
+  <div id="tabs">
+    <button data-tab="components" class="active">Parts (состав)</button>
+    <button data-tab="jsonarea">JSON</button>
+    <button data-tab="bom">🛒 BOM</button>
+  </div>
+  <div id="components" class="tabpane active"></div>
+  <div id="jsonarea" class="tabpane">
+    <div id="jsonbar">
+      <span class="title">JSON configuration (конфигурация)</span>
+      <span id="jsonStatus"></span>
+      <button id="btnApply">Apply (Применить)</button>
+      <button id="btnCopy">Copy (Копировать)</button>
+    </div>
+    <textarea id="jsonText" spellcheck="false"></textarea>
+  </div>
+  <div id="bom" class="tabpane">
+    <h2>🛒 BOM — parts to buy (список закупки)</h2>
+    <div id="armName"></div>
+    <div class="note">Ориентировочные цены, ~USD (AliExpress). Пересчитывается под текущую руку.</div>
+    <table id="bomTable"></table>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ================= Описание типов компонентов ================= */
+
+const TYPES = {
+  yaw: {
+    icon: '🔄',
+    label: 'Yaw (поворот)',
+    color: 0x4da3ff,
+    params: [{ key: 'angle', label: 'Angle (угол), °', min: -180, max: 180, step: 1, def: 0 }],
+    height: 0.5,
+  },
+  pitch: {
+    icon: '📐',
+    label: 'Pitch (наклон)',
+    color: 0xffa14d,
+    params: [{ key: 'angle', label: 'Angle (угол), °', min: -120, max: 120, step: 1, def: 0 }],
+    height: 0.44,
+  },
+  roll: {
+    icon: '🌀',
+    label: 'Roll (вращение)',
+    color: 0xc07dff,
+    params: [{ key: 'angle', label: 'Angle (угол), °', min: -180, max: 180, step: 1, def: 0 }],
+    height: 0.4,
+  },
+  link: {
+    icon: '📏',
+    label: 'Link (звено)',
+    color: 0x9aa7b8,
+    params: [{ key: 'length', label: 'Length (длина)', min: 0.3, max: 3, step: 0.05, def: 1 }],
+  },
+  gripper: {
+    icon: '🤏',
+    label: 'Gripper (схват)',
+    color: 0x57d98a,
+    params: [{ key: 'open', label: 'Opening (раскрытие), %', min: 0, max: 100, step: 1, def: 50 }],
+    height: 0.55,
+  },
+  prismatic: {
+    icon: '🔭',
+    label: 'Prismatic (телескоп)',
+    color: 0x4dd9cf,
+    params: [{ key: 'ext', label: 'Extension (выдвижение)', min: 0, max: 1.2, step: 0.05, def: 0.4 }],
+  },
+  spherical: {
+    icon: '🕹️',
+    label: 'Ball joint (шаровой)',
+    color: 0xff6fa5,
+    params: [
+      { key: 'pitch', label: 'Pitch (наклон), °', min: -90, max: 90, step: 1, def: 0 },
+      { key: 'yaw', label: 'Yaw (поворот), °', min: -180, max: 180, step: 1, def: 0 },
+    ],
+  },
+  offset: {
+    icon: '↪️',
+    label: 'Offset (кронштейн)',
+    color: 0xb8a58f,
+    params: [{ key: 'length', label: 'Length (длина)', min: 0.2, max: 1.5, step: 0.05, def: 0.5 }],
+  },
+  rail: {
+    icon: '🛤️',
+    label: 'Rail (рельс)',
+    color: 0xd9c34d,
+    params: [{ key: 'pos', label: 'Position (позиция)', min: -2, max: 2, step: 0.05, def: 0 }],
+  },
+  suction: {
+    icon: '🪠',
+    label: 'Suction cup (присоска)',
+    color: 0x7fd94d,
+    params: [{ key: 'power', label: 'Suction (присос), %', min: 0, max: 100, step: 1, def: 0 }],
+  },
+};
+
+/* ---- SVG-иконки компонентов: единый линейный стиль ---- */
+const ICONS = {
+  /* вертикальная ось + эллипс вращения со стрелкой */
+  yaw: `<line x1="9" y1="2.5" x2="9" y2="7.5"/>
+        <path d="M12.8 9.6a4.8 2.2 0 1 1-1.6-1.7"/>
+        <path d="M13.6 7.6l-.6 2.2-2.2-.5"/>`,
+  /* шарнир: ось, горизонтальное и наклонённое плечо, дуга */
+  pitch: `<circle cx="5" cy="13.5" r="1.6" fill="currentColor" stroke="none"/>
+          <path d="M6.2 13.5h7.3"/>
+          <path d="M5.8 12.2l4.4-5.8"/>
+          <path d="M13 10.6a6.5 6.5 0 0 0-1.9-3.2"/>`,
+  /* стержень + кольцо вращения вокруг собственной оси */
+  roll: `<line x1="9" y1="2" x2="9" y2="16"/>
+         <path d="M4.8 8.2a4.2 2 0 0 0 8.4 0"/>
+         <path d="M13.6 9.7l.3-2.1-2-.3"/>`,
+  /* звено: два шарнира, соединённые тягой */
+  link: `<circle cx="4.5" cy="13.5" r="1.7" fill="currentColor" stroke="none"/>
+         <circle cx="13.5" cy="4.5" r="1.7" fill="currentColor" stroke="none"/>
+         <line x1="6" y1="12" x2="12" y2="6"/>`,
+  /* клешня: ножка и два пальца с загибом */
+  gripper: `<line x1="9" y1="16" x2="9" y2="11.5"/>
+            <path d="M5.5 3.5v4.5a3.5 3.5 0 0 0 7 0V3.5"/>
+            <line x1="5.5" y1="3.5" x2="6.8" y2="4.4"/>
+            <line x1="12.5" y1="3.5" x2="11.2" y2="4.4"/>`,
+  /* телескоп: корпус, шток, стрелка выдвижения */
+  prismatic: `<rect x="5.8" y="9" width="6.4" height="6.5" rx="1"/>
+              <rect x="7.4" y="4.5" width="3.2" height="4.5" rx="0.8"/>
+              <line x1="9" y1="3.5" x2="9" y2="1.2"/>
+              <path d="M7.9 2.2 9 1.1l1.1 1.1"/>`,
+  /* шаровой: сфера в чашке + хвостовик */
+  spherical: `<circle cx="9" cy="8" r="3"/>
+              <line x1="9" y1="5" x2="9" y2="2"/>
+              <path d="M4.2 10.5a5 5 0 0 0 9.6 0"/>`,
+  /* Г-кронштейн с крепёжными точками */
+  offset: `<path d="M4.5 2.5v11h9"/>
+           <circle cx="4.5" cy="2.5" r="1.4" fill="currentColor" stroke="none"/>
+           <circle cx="13.5" cy="13.5" r="1.4" fill="currentColor" stroke="none"/>`,
+  /* рельс: направляющая, каретка, двунаправленная стрелка */
+  rail: `<line x1="1.8" y1="14" x2="16.2" y2="14"/>
+         <rect x="6.3" y="8.5" width="5.4" height="4" rx="1"/>
+         <path d="M4 5h10M4 5l1.6-1.4M4 5l1.6 1.4M14 5l-1.6-1.4M14 5l-1.6 1.4"/>`,
+  /* присоска: купол, шток, поверхность пунктиром */
+  suction: `<path d="M4.3 10.5a4.7 4.7 0 0 1 9.4 0"/>
+            <line x1="3.2" y1="10.5" x2="14.8" y2="10.5"/>
+            <line x1="9" y1="5.8" x2="9" y2="2.5"/>
+            <line x1="4" y1="14.5" x2="14" y2="14.5" stroke-dasharray="2.2 2"/>`,
+};
+
+function iconSVG(type, size = 16) {
+  const hex = '#' + TYPES[type].color.toString(16).padStart(6, '0');
+  return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 18 18" fill="none"
+    style="color:${hex}" stroke="currentColor" stroke-width="1.6"
+    stroke-linecap="round" stroke-linejoin="round">${ICONS[type]}</svg>`;
+}
+
+/* Состояние: цепочка компонентов от основания к концу */
+let components = [
+  { type: 'yaw', angle: 0 },
+  { type: 'pitch', angle: 40 },
+  { type: 'link', length: 1.2 },
+  { type: 'pitch', angle: -60 },
+  { type: 'link', length: 1.0 },
+  { type: 'roll', angle: 0 },
+  { type: 'gripper', open: 60 },
+];
+
+/* ================= Сцена three.js ================= */
+
+const viewport = document.getElementById('viewport');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14171c);
+scene.fog = new THREE.Fog(0x14171c, 14, 30);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+camera.position.set(4.5, 3.5, 5.5);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+viewport.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.3, 0);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x2a2620, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(5, 9, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -7;
+sun.shadow.camera.right = sun.shadow.camera.top = 7;
+scene.add(sun);
+
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(9, 64),
+  new THREE.MeshStandardMaterial({ color: 0x1b2027, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(14, 28, 0x3a4656, 0x242c37);
+grid.position.y = 0.001;
+scene.add(grid);
+
+function resize() {
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+}
+new ResizeObserver(resize).observe(viewport);
+resize();
+
+/* ================= Построение руки ================= */
+
+const armRoot = new THREE.Group();
+scene.add(armRoot);
+/* pivots[i] — группа, чьё вращение/размер управляется слайдером компонента i */
+let pivots = [];
+
+function mat(color) {
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.35 });
+}
+function shadowed(mesh) {
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/* ---- Зоны вращения/движения (dashed motion zones) ---- */
+
+function dashMat(color) {
+  return new THREE.LineDashedMaterial({ color, dashSize: 0.06, gapSize: 0.05, transparent: true, opacity: 0.55 });
+}
+
+/* Полупрозрачный сектор с пунктирной границей в плоскости XY:
+   углы в градусах от локальной оси +X против часовой */
+function makeSector(color, radius, startDeg, lengthDeg) {
+  const g = new THREE.Group();
+  const seg = Math.max(12, Math.round(lengthDeg / 5));
+  const circ = new THREE.CircleGeometry(radius, seg,
+    THREE.MathUtils.degToRad(startDeg), THREE.MathUtils.degToRad(lengthDeg));
+  const fill = new THREE.Mesh(circ, new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false,
+  }));
+  g.add(fill);
+  const pts = [];
+  const full = lengthDeg >= 359.9;
+  if (!full) pts.push(new THREE.Vector3(0, 0, 0));
+  for (let i = 0; i <= seg; i++) {
+    const a = THREE.MathUtils.degToRad(startDeg + lengthDeg * i / seg);
+    pts.push(new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius, 0));
+  }
+  if (!full) pts.push(new THREE.Vector3(0, 0, 0));
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), dashMat(color));
+  line.computeLineDistances();
+  g.add(line);
+  return g;
+}
+
+function makeDashedLine(color, points) {
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), dashMat(color));
+  line.computeLineDistances();
+  return line;
+}
+
+/* Создаёт зону для компонента и добавляет её в нужный узел.
+   holder — узел, который НЕ вращается вместе с суставом (зона показывает диапазон). */
+function makeZone(c, holder, attachY) {
+  const t = TYPES[c.type];
+  const p = t.params[0];
+  const zone = new THREE.Group();
+
+  if (c.type === 'yaw' || c.type === 'roll') {
+    /* горизонтальный диск в плоскости вращения (вокруг вертикальной оси) */
+    const r = c.type === 'yaw' ? 0.72 : 0.5;
+    const sector = makeSector(t.color, r, p.min - 90, p.max - p.min);
+    sector.rotation.x = -Math.PI / 2;
+    zone.add(sector);
+    zone.position.y = attachY + (t.height ?? 0) / 2;
+  } else if (c.type === 'pitch') {
+    /* вертикальный сектор в плоскости качания (перпендикулярно оси сустава) */
+    const sector = makeSector(t.color, 0.8, 90 - p.max, p.max - p.min);
+    sector.rotation.y = -Math.PI / 2;
+    zone.add(sector);
+    zone.position.y = attachY + t.height / 2;
+  } else if (c.type === 'link') {
+    /* пунктир диапазона длины звена вдоль оси */
+    zone.add(makeDashedLine(t.color, [
+      new THREE.Vector3(0, p.min, 0), new THREE.Vector3(0, p.max, 0),
+    ]));
+    zone.add(makeDashedLine(t.color, [
+      new THREE.Vector3(-0.12, p.max, 0), new THREE.Vector3(0.12, p.max, 0),
+    ]));
+    zone.position.y = attachY;
+  } else if (c.type === 'gripper') {
+    /* пунктир хода пальцев схвата */
+    const y = 0.16 + 0.21, xMax = 0.05 + 0.18 + 0.06;
+    zone.add(makeDashedLine(t.color, [
+      new THREE.Vector3(-xMax, y, 0), new THREE.Vector3(xMax, y, 0),
+    ]));
+    zone.add(makeDashedLine(t.color, [new THREE.Vector3(-xMax, y - 0.12, 0), new THREE.Vector3(-xMax, y + 0.12, 0)]));
+    zone.add(makeDashedLine(t.color, [new THREE.Vector3(xMax, y - 0.12, 0), new THREE.Vector3(xMax, y + 0.12, 0)]));
+    zone.position.y = attachY;
+  } else if (c.type === 'prismatic') {
+    /* пунктир хода штока телескопа */
+    const x = 0.3;
+    zone.add(makeDashedLine(t.color, [
+      new THREE.Vector3(x, 0.8 + p.min, 0), new THREE.Vector3(x, 0.8 + p.max, 0),
+    ]));
+    zone.add(makeDashedLine(t.color, [new THREE.Vector3(x - 0.1, 0.8 + p.min, 0), new THREE.Vector3(x + 0.1, 0.8 + p.min, 0)]));
+    zone.add(makeDashedLine(t.color, [new THREE.Vector3(x - 0.1, 0.8 + p.max, 0), new THREE.Vector3(x + 0.1, 0.8 + p.max, 0)]));
+  } else if (c.type === 'spherical') {
+    /* два диапазона: диск yaw + вертикальный сектор pitch */
+    const pPitch = t.params[0], pYaw = t.params[1];
+    const disc = makeSector(t.color, 0.5, pYaw.min - 90, pYaw.max - pYaw.min);
+    disc.rotation.x = -Math.PI / 2;
+    const sector = makeSector(t.color, 0.62, 90 - pPitch.max, pPitch.max - pPitch.min);
+    sector.rotation.y = -Math.PI / 2;
+    zone.add(disc, sector);
+    zone.position.y = 0.32;
+  } else if (c.type === 'rail') {
+    /* пунктир хода каретки по рельсу */
+    const y = 0.34;
+    zone.add(makeDashedLine(t.color, [
+      new THREE.Vector3(p.min, y, 0), new THREE.Vector3(p.max, y, 0),
+    ]));
+    zone.add(makeDashedLine(t.color, [new THREE.Vector3(p.min, y - 0.12, 0), new THREE.Vector3(p.min, y + 0.12, 0)]));
+    zone.add(makeDashedLine(t.color, [new THREE.Vector3(p.max, y - 0.12, 0), new THREE.Vector3(p.max, y + 0.12, 0)]));
+  }
+
+  zone.visible = c.showZone !== false;
+  c._zone = zone;
+  holder.add(zone);
+}
+
+function buildArm() {
+  armRoot.clear();
+  pivots = [];
+
+  /* Неподвижное основание */
+  const base = new THREE.Group();
+  base.add(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 0.25, 32), mat(0x3d4654))));
+  base.children[0].position.y = 0.125;
+  armRoot.add(base);
+
+  let parent = base;      // группа, к которой крепим следующий компонент
+  let attachY = 0.25;     // высота точки крепления в системе parent
+
+  for (const c of components) {
+    const t = TYPES[c.type];
+    const pivot = new THREE.Group();
+    pivot.position.y = attachY;
+    parent.add(pivot);
+    pivots.push(pivot);
+
+    if (c.type === 'yaw') {
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, t.height, 28), mat(t.color)));
+      body.position.y = t.height / 2;
+      pivot.add(body);
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(0.06, t.height * 0.7, 0.42), mat(0xffffff));
+      mark.position.set(0, t.height / 2, 0.2);
+      pivot.add(mark);
+      pivot.rotation.y = THREE.MathUtils.degToRad(c.angle ?? 0);
+      makeZone(c, parent, attachY);
+      parent = pivot;
+      attachY = t.height;
+
+    } else if (c.type === 'pitch') {
+      /* корпус-ось лежит горизонтально; вращение вокруг X */
+      const axle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.62, 24), mat(t.color)));
+      axle.rotation.z = Math.PI / 2;
+      axle.position.y = t.height / 2;
+      const cap1 = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.07, 24), mat(0x2c333f));
+      cap1.rotation.z = Math.PI / 2; cap1.position.set(0.33, t.height / 2, 0);
+      const cap2 = cap1.clone(); cap2.position.x = -0.33;
+      /* внутренняя группа вращается вокруг оси */
+      const rot = new THREE.Group();
+      rot.position.y = t.height / 2;
+      pivot.add(axle, cap1, cap2, rot);
+      rot.rotation.x = THREE.MathUtils.degToRad(c.angle ?? 0);
+      c._rot = rot;
+      makeZone(c, pivot, 0);
+      parent = rot;
+      attachY = t.height / 2;
+
+    } else if (c.type === 'roll') {
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, t.height, 24), mat(t.color)));
+      body.position.y = t.height / 2;
+      pivot.add(body);
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(0.05, t.height * 0.8, 0.3), mat(0xffffff));
+      mark.position.set(0, t.height / 2, 0.16);
+      pivot.add(mark);
+      pivot.rotation.y = THREE.MathUtils.degToRad(c.angle ?? 0);
+      makeZone(c, parent, attachY);
+      parent = pivot;
+      attachY = t.height;
+
+    } else if (c.type === 'link') {
+      const len = c.length ?? 1;
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1, 20), mat(t.color)));
+      body.position.y = 0.5;
+      const linkScale = new THREE.Group();
+      linkScale.add(body);
+      linkScale.scale.y = len;
+      pivot.add(linkScale);
+      c._scale = linkScale;
+      makeZone(c, pivot, 0);
+      parent = pivot;
+      attachY = len;
+
+    } else if (c.type === 'gripper') {
+      const palm = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.3), mat(0x2c333f)));
+      palm.position.y = 0.08;
+      pivot.add(palm);
+      const fGeo = new THREE.BoxGeometry(0.09, 0.42, 0.16);
+      const f1 = shadowed(new THREE.Mesh(fGeo, mat(t.color)));
+      const f2 = shadowed(new THREE.Mesh(fGeo, mat(t.color)));
+      f1.position.y = f2.position.y = 0.16 + 0.21;
+      pivot.add(f1, f2);
+      c._fingers = [f1, f2];
+      applyGripper(c);
+      makeZone(c, pivot, 0);
+      parent = pivot;
+      attachY = t.height;
+
+    } else if (c.type === 'prismatic') {
+      /* телескопический линейный привод: шток выдвигается вдоль оси */
+      const outer = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.7, 20), mat(t.color)));
+      outer.position.y = 0.35;
+      pivot.add(outer);
+      const rod = new THREE.Group();
+      const rodMesh = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.8, 16), mat(0xcfd6e0)));
+      rodMesh.position.y = 0.4;
+      rod.add(rodMesh);
+      rod.position.y = c.ext ?? 0.4;
+      pivot.add(rod);
+      c._rod = rod;
+      makeZone(c, pivot, 0);
+      parent = rod;
+      attachY = 0.8;
+
+    } else if (c.type === 'spherical') {
+      /* шаровой шарнир: два вращения (yaw + pitch) в одном узле */
+      const socket = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.2, 24), mat(0x2c333f)));
+      socket.position.y = 0.1;
+      const ball = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 18), mat(t.color)));
+      ball.position.y = 0.32;
+      pivot.add(socket, ball);
+      const g1 = new THREE.Group(); g1.position.y = 0.32;
+      const g2 = new THREE.Group();
+      const stub = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 14), mat(0xcfd6e0)));
+      stub.position.y = 0.15;
+      g2.add(stub);
+      g1.add(g2);
+      pivot.add(g1);
+      g1.rotation.y = THREE.MathUtils.degToRad(c.yaw ?? 0);
+      g2.rotation.x = THREE.MathUtils.degToRad(c.pitch ?? 0);
+      c._g1 = g1; c._g2 = g2;
+      makeZone(c, pivot, 0);
+      parent = g2;
+      attachY = 0.3;
+
+    } else if (c.type === 'offset') {
+      /* Г-образный кронштейн: боковое смещение оси */
+      const len = c.length ?? 0.5;
+      const vert = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), mat(t.color)));
+      vert.position.y = 0.12;
+      const horiz = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, len + 0.1), mat(t.color)));
+      horiz.position.set(0, 0.2, len / 2);
+      pivot.add(vert, horiz);
+      const end = new THREE.Group();
+      end.position.set(0, 0.28, len);
+      pivot.add(end);
+      parent = end;
+      attachY = 0;
+
+    } else if (c.type === 'rail') {
+      /* линейный рельс: каретка ездит вдоль X, несёт всё, что выше */
+      const track = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.12, 0.5), mat(0x2c333f)));
+      track.position.y = 0.06;
+      pivot.add(track);
+      const car = new THREE.Group();
+      const carBody = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 0.58), mat(t.color)));
+      carBody.position.y = 0.21;
+      car.add(carBody);
+      car.position.x = c.pos ?? 0;
+      pivot.add(car);
+      c._car = car;
+      makeZone(c, pivot, 0);
+      parent = car;
+      attachY = 0.3;
+
+    } else if (c.type === 'suction') {
+      /* вакуумная присоска: сила присоса сжимает манжету */
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.17, 0.16, 18), mat(0x2c333f)));
+      body.position.y = 0.08;
+      pivot.add(body);
+      const cup = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.2, 22), mat(t.color)));
+      cup.rotation.x = Math.PI;
+      pivot.add(cup);
+      c._cup = cup;
+      applySuction(c);
+      parent = pivot;
+      attachY = 0.38;
+    }
+  }
+  updateJSONView();
+  updateBOM();
+}
+
+function applyGripper(c) {
+  const gap = 0.05 + (c.open ?? 50) / 100 * 0.18;
+  c._fingers[0].position.x = gap;
+  c._fingers[1].position.x = -gap;
+}
+
+function applySuction(c) {
+  const squash = 1 - (c.power ?? 0) / 100 * 0.45;
+  c._cup.scale.y = squash;
+  c._cup.position.y = 0.16 + 0.1 * squash;
+}
+
+/* Быстрое применение параметра без пересборки сцены;
+   возвращает false, если нужна полная пересборка (link/offset) */
+function applyParam3D(c) {
+  if (c.type === 'yaw' || c.type === 'roll') {
+    pivots[components.indexOf(c)].rotation.y = THREE.MathUtils.degToRad(c.angle);
+  } else if (c.type === 'pitch') {
+    c._rot.rotation.x = THREE.MathUtils.degToRad(c.angle);
+  } else if (c.type === 'gripper') {
+    applyGripper(c);
+  } else if (c.type === 'prismatic') {
+    c._rod.position.y = c.ext;
+  } else if (c.type === 'spherical') {
+    c._g1.rotation.y = THREE.MathUtils.degToRad(c.yaw ?? 0);
+    c._g2.rotation.x = THREE.MathUtils.degToRad(c.pitch ?? 0);
+  } else if (c.type === 'rail') {
+    c._car.position.x = c.pos;
+  } else if (c.type === 'suction') {
+    applySuction(c);
+  } else if (c.type === 'link' || c.type === 'offset') {
+    /* длина меняет положение потомков — проще пересобрать */
+    return false;
+  }
+  return true;
+}
+
+function applyParam(c) {
+  if (!applyParam3D(c)) { buildArm(); return; }
+  updateJSONView();
+}
+
+/* ================= UI: панель компонентов ================= */
+
+const addRow = document.getElementById('addRow');
+const compList = document.getElementById('components');
+
+for (const [type, t] of Object.entries(TYPES)) {
+  const b = document.createElement('button');
+  const hex = '#' + t.color.toString(16).padStart(6, '0');
+  b.innerHTML = `${iconSVG(type)}+ ${t.label}`;
+  b.style.borderColor = hex + '55';
+  b.title = t.label;
+  b.onclick = () => {
+    const c = { type };
+    for (const p of t.params) c[p.key] = p.def;
+    components.push(c);
+    buildArm();
+    renderPanel();
+  };
+  addRow.appendChild(b);
+}
+
+function renderPanel() {
+  compList.innerHTML = '';
+  if (!components.length) {
+    compList.innerHTML = '<div id="empty">Arm is empty (рука пуста).<br>Добавьте компоненты кнопками выше — они наращиваются от основания.</div>';
+    return;
+  }
+  const note = document.createElement('div');
+  note.id = 'orderNote';
+  note.textContent = '⬇ order from base (порядок — от основания к концу руки)';
+  compList.appendChild(note);
+  components.forEach((c, i) => {
+    const t = TYPES[c.type];
+    const card = document.createElement('div');
+    card.className = 'comp';
+
+    const head = document.createElement('div');
+    head.className = 'comp-head';
+    head.innerHTML = `<span class="num" style="background:#${t.color.toString(16).padStart(6,'0')}">${i + 1}</span>
+      ${iconSVG(c.type, 24)}<span class="name">${t.label}</span>`;
+    if (c._zone) {
+      const zoneLbl = document.createElement('label');
+      zoneLbl.className = 'zone-lbl';
+      zoneLbl.title = 'Motion zone (зона движения) — вкл/выкл пунктирную область';
+      const zoneToggle = document.createElement('input');
+      zoneToggle.type = 'checkbox';
+      zoneToggle.className = 'zone-toggle';
+      zoneToggle.checked = c.showZone !== false;
+      zoneToggle.onchange = () => {
+        c.showZone = zoneToggle.checked;
+        if (c._zone) c._zone.visible = zoneToggle.checked;
+      };
+      zoneLbl.appendChild(zoneToggle);
+      zoneLbl.appendChild(document.createTextNode('zone (зона)'));
+      head.appendChild(zoneLbl);
+    }
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '✕'; del.title = 'Remove (удалить компонент)';
+    del.onclick = () => { components.splice(i, 1); buildArm(); renderPanel(); };
+    head.appendChild(del);
+    card.appendChild(head);
+
+    for (const p of t.params) {
+      const row = document.createElement('div');
+      row.className = 'ctrl';
+      const label = document.createElement('label');
+      label.textContent = p.label;
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = p.min; slider.max = p.max; slider.step = p.step;
+      slider.value = c[p.key] ?? p.def;
+      const val = document.createElement('span');
+      val.className = 'val';
+      val.textContent = slider.value;
+      slider.oninput = () => {
+        c[p.key] = parseFloat(slider.value);
+        val.textContent = slider.value;
+        applyParam(c);
+      };
+      c._sliders = c._sliders || {};
+      c._sliders[p.key] = { slider, val };
+      row.append(label, slider, val);
+      card.appendChild(row);
+    }
+    compList.appendChild(card);
+  });
+}
+
+/* ================= Авто-кадрирование камеры ================= */
+
+const _box = new THREE.Box3(), _tmpBox = new THREE.Box3(), _sphere = new THREE.Sphere();
+const _frustum = new THREE.Frustum(), _projScreen = new THREE.Matrix4();
+
+/* ограничивающая сфера видимой части руки */
+function armSphere() {
+  _box.makeEmpty();
+  armRoot.updateWorldMatrix(true, true);
+  armRoot.traverseVisible(o => {
+    const g = o.geometry;
+    if (!g) return;
+    if (!g.boundingBox) g.computeBoundingBox();
+    _tmpBox.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
+    _box.union(_tmpBox);
+  });
+  return _box.isEmpty() ? null : _box.getBoundingSphere(_sphere);
+}
+
+/* плавно отодвигает камеру, если рука вылезает за кадр (только наружу) */
+function cameraAutoExpand() {
+  const s = armSphere();
+  if (!s) return;
+  camera.updateMatrixWorld();
+  _projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  _frustum.setFromProjectionMatrix(_projScreen);
+  for (const plane of _frustum.planes) {
+    if (plane.distanceToPoint(s.center) < s.radius * 0.92) {
+      const dir = camera.position.clone().sub(controls.target);
+      const dist = dir.length();
+      if (dist < 80) {
+        camera.position.copy(controls.target).addScaledVector(dir.normalize(), dist * 1.03);
+      }
+      return;
+    }
+  }
+}
+
+/* полный сброс кадра под текущую руку (после генерации) */
+function fitCameraToArm() {
+  const s = armSphere();
+  if (!s) return;
+  const vHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+  const needed = s.radius * 1.15 / Math.sin(Math.min(vHalf, hHalf));
+  controls.target.copy(s.center);
+  const dir = new THREE.Vector3(1, 0.62, 1.25).normalize();
+  camera.position.copy(s.center).addScaledVector(dir, Math.max(needed, 3.5));
+}
+
+/* ================= Генератор случайных рук ================= */
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randi(a, b) { return Math.round(rand(a, b)); }
+function randLen(a, b) { return +rand(a, b).toFixed(2); }
+
+function generateArm() {
+  const c = [];
+
+  /* иногда — рельс в основании */
+  if (Math.random() < 0.3) c.push({ type: 'rail', pos: randLen(-1.5, 1.5) });
+
+  /* база: чаще турель-yaw, иногда шаровой шарнир */
+  if (Math.random() < 0.8) c.push({ type: 'yaw', angle: randi(-90, 90) });
+  else c.push({ type: 'spherical', pitch: randi(-30, 30), yaw: randi(-60, 60) });
+
+  /* 2–4 секции руки в разных вариациях */
+  const sections = randi(2, 4);
+  for (let i = 0; i < sections; i++) {
+    const r = Math.random();
+    if (r < 0.5) {
+      c.push({ type: 'pitch', angle: randi(-70, 70) });
+      c.push({ type: 'link', length: randLen(0.6, 1.6) });
+    } else if (r < 0.65) {
+      c.push({ type: 'prismatic', ext: randLen(0.1, 1.1) });
+    } else if (r < 0.78) {
+      c.push({ type: 'spherical', pitch: randi(-45, 45), yaw: randi(-90, 90) });
+      c.push({ type: 'link', length: randLen(0.5, 1.2) });
+    } else if (r < 0.88) {
+      c.push({ type: 'offset', length: randLen(0.3, 1.0) });
+    } else {
+      c.push({ type: 'roll', angle: randi(-90, 90) });
+      c.push({ type: 'link', length: randLen(0.5, 1.2) });
+    }
+  }
+
+  /* запястье */
+  if (Math.random() < 0.6) c.push({ type: 'roll', angle: randi(-90, 90) });
+  if (Math.random() < 0.5) c.push({ type: 'pitch', angle: randi(-45, 45) });
+
+  /* концевой эффектор — не всегда */
+  if (Math.random() < 0.85) {
+    c.push(Math.random() < 0.6
+      ? { type: 'gripper', open: randi(0, 100) }
+      : { type: 'suction', power: randi(0, 100) });
+  }
+
+  components = c;
+  buildArm();
+  renderPanel();
+  fitCameraToArm(); // сброс камеры — только при генерации новой руки
+}
+
+document.getElementById('btnGenerate').onclick = generateArm;
+
+/* ================= Вкладки панели ================= */
+
+for (const btn of document.querySelectorAll('#tabs button')) {
+  btn.onclick = () => {
+    for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('active', b === btn);
+    for (const pane of document.querySelectorAll('.tabpane')) {
+      pane.classList.toggle('active', pane.id === btn.dataset.tab);
+    }
+    if (btn.dataset.tab === 'jsonarea') updateJSONView();
+  };
+}
+
+/* ================= BOM: список закупки ================= */
+
+/* каталог деталей: цены ориентировочные, ~USD */
+const PARTS = {
+  esp32:     { ru: 'Контроллер ESP32-S3',            en: 'ESP32-S3 board',        price: 8 },
+  tmc2209:   { ru: 'Драйвер шагового ТМС2209',       en: 'Stepper driver TMC2209', price: 4 },
+  nema17:    { ru: 'Шаговый двигатель NEMA 17',      en: 'NEMA 17 stepper motor', price: 12 },
+  nema14:    { ru: 'Шаговый двигатель NEMA 14',      en: 'NEMA 14 stepper motor', price: 10 },
+  gearbox:   { ru: 'Планетарный редуктор 1:10…1:30', en: 'Planetary gearbox',     price: 25 },
+  endstop:   { ru: 'Концевой выключатель',           en: 'Limit switch (endstop)', price: 1 },
+  buck:      { ru: 'DC-DC преобразователь 12→5 В',   en: 'Buck converter',        price: 2 },
+  psu:       { ru: 'Блок питания 12 В / 8 А',        en: 'Power supply 12 V',     price: 20 },
+  leadscrew: { ru: 'Ходовой винт',                   en: 'Lead screw',            price: 8 },
+  thrust:    { ru: 'Упорный подшипник (турель)',     en: 'Thrust bearing',        price: 5 },
+  bearings:  { ru: 'Шарикоподшипники (компл.)',      en: 'Ball bearings set',     price: 3 },
+  linrail:   { ru: 'Направляющая MGN12 + каретка',   en: 'Linear rail + carriage', price: 18 },
+  belt:      { ru: 'Ремень GT2 + шкивы',             en: 'GT2 belt + pulleys',    price: 6 },
+  pump:      { ru: 'Мини вакуумный насос',           en: 'Vacuum pump',           price: 12 },
+  cup:       { ru: 'Вакуумная присоска',             en: 'Suction cup',           price: 2 },
+  print:     { ru: '3D-печать: деталь (пластик)',    en: '3D-printed part',       price: 4 },
+  cap:       { ru: 'Конденсатор 1000 мкФ',           en: 'Capacitor 1000 µF',     price: 0.5 },
+  hw:        { ru: 'Крепёж M3, провода, разъёмы',    en: 'M3 hardware, wires',    price: 10 },
+};
+
+/* что нужно докупить на каждый компонент руки */
+const NEEDS = {
+  yaw:       { nema17: 1, tmc2209: 1, endstop: 1, thrust: 1, print: 1 },
+  pitch:     { nema17: 1, gearbox: 1, tmc2209: 1, endstop: 1, bearings: 1, print: 1 },
+  roll:      { nema14: 1, tmc2209: 1, endstop: 1, print: 1 },
+  spherical: { nema14: 2, tmc2209: 2, endstop: 2, print: 1 },
+  link:      { print: 1 },
+  offset:    { print: 1 },
+  prismatic: { nema17: 1, leadscrew: 1, tmc2209: 1, endstop: 1, print: 1 },
+  rail:      { linrail: 1, nema17: 1, belt: 1, tmc2209: 1, endstop: 1, print: 1 },
+  gripper:   { nema14: 1, leadscrew: 1, tmc2209: 1, print: 1 },
+  suction:   { pump: 1, cup: 1, print: 1 },
+};
+
+const bomTable = document.getElementById('bomTable');
+const armNameEl = document.getElementById('armName');
+
+/* название руки в принятой номенклатуре: «N-осевой манипулятор с захватом» */
+function armName() {
+  if (!components.length) return { ru: 'Пустая конфигурация', en: 'Empty configuration' };
+
+  const AXES = { yaw: 1, pitch: 1, roll: 1, prismatic: 1, spherical: 2 };
+  let axes = 0, rails = 0, grippers = 0, suctions = 0;
+  for (const c of components) {
+    axes += AXES[c.type] ?? 0;
+    if (c.type === 'rail') rails++;
+    if (c.type === 'gripper') grippers++;
+    if (c.type === 'suction') suctions++;
+  }
+
+  let ru, en;
+  if (axes === 0) { ru = 'Статическая конструкция'; en = 'Static structure'; }
+  else { ru = `${axes}-осевой манипулятор`; en = `${axes}-axis manipulator`; }
+
+  if (rails) { ru += ' на линейном рельсе'; en += ' on linear rail'; }
+
+  if (grippers && suctions) { ru += ' с захватом и вакуумной присоской'; en += ' with gripper and suction cup'; }
+  else if (grippers) { ru += ' с захватом'; en += ' with gripper'; }
+  else if (suctions) { ru += ' с вакуумным схватом'; en += ' with vacuum suction cup'; }
+  else if (axes > 0) { ru += ' без концевого эффектора'; en += ' without end effector'; }
+
+  return { ru, en };
+}
+
+function fmt$(v) { return '$' + (Math.round(v * 100) / 100).toLocaleString('en-US'); }
+
+function updateBOM() {
+  const name = armName();
+  armNameEl.innerHTML = `🦾 ${name.ru}<span class="en">${name.en}</span>`;
+
+  const qty = {};
+  const add = (key, n) => { qty[key] = (qty[key] || 0) + n; };
+
+  for (const c of components) {
+    const needs = NEEDS[c.type];
+    if (!needs) continue;
+    for (const [key, n] of Object.entries(needs)) add(key, n);
+  }
+
+  if (components.length) {
+    /* базовая электроника — один комплект на руку */
+    add('esp32', 1);
+    add('buck', 1);
+    add('psu', 1);
+    add('hw', 1);
+    if (qty.tmc2209) add('cap', qty.tmc2209); // по конденсатору на драйвер
+  }
+
+  let html = `<tr>
+    <th>Component (компонент)</th>
+    <th class="num">Qty<br>(шт)</th>
+    <th class="num">Price<br>(цена)</th>
+    <th class="num">Sum<br>(сумма)</th>
+  </tr>`;
+  let total = 0;
+  for (const key of Object.keys(PARTS)) {
+    if (!qty[key]) continue;
+    const p = PARTS[key];
+    const sum = qty[key] * p.price;
+    total += sum;
+    html += `<tr>
+      <td>${p.ru}<br><span class="en">${p.en}</span></td>
+      <td class="num">${qty[key]}</td>
+      <td class="num">${fmt$(p.price)}</td>
+      <td class="num">${fmt$(sum)}</td>
+    </tr>`;
+  }
+  if (!total) {
+    bomTable.innerHTML = '<tr><td class="en">Рука пуста — покупать нечего (nothing to buy).</td></tr>';
+    return;
+  }
+  html += `<tr class="total">
+    <td colspan="3">Итого / Total</td>
+    <td class="num">${fmt$(total)}</td>
+  </tr>`;
+  bomTable.innerHTML = html;
+}
+
+/* ================= JSON ================= */
+
+const jsonText = document.getElementById('jsonText');
+const jsonStatus = document.getElementById('jsonStatus');
+
+function cleanConfig() {
+  return components.map(c => {
+    const out = { type: c.type };
+    for (const p of TYPES[c.type].params) out[p.key] = c[p.key] ?? p.def;
+    return out;
+  });
+}
+
+function updateJSONView() {
+  if (document.activeElement === jsonText) return; // не мешаем ручному редактированию
+  jsonText.value = JSON.stringify(cleanConfig(), null, 2);
+}
+
+function setStatus(text, cls) {
+  jsonStatus.textContent = text;
+  jsonStatus.className = cls || '';
+  if (text) setTimeout(() => { if (jsonStatus.textContent === text) { jsonStatus.textContent = ''; jsonStatus.className = ''; } }, 3000);
+}
+
+document.getElementById('btnApply').onclick = () => {
+  try {
+    const data = JSON.parse(jsonText.value);
+    if (!Array.isArray(data)) throw new Error('ожидается массив компонентов');
+    for (const [i, c] of data.entries()) {
+      if (!c || !TYPES[c.type]) throw new Error(`компонент #${i + 1}: неизвестный type "${c && c.type}"`);
+      for (const p of TYPES[c.type].params) {
+        if (c[p.key] === undefined) c[p.key] = p.def;
+        c[p.key] = Math.min(p.max, Math.max(p.min, +c[p.key] || 0));
+      }
+    }
+    components = data;
+    buildArm();
+    renderPanel();
+    setStatus('✓ applied (применено)', 'ok');
+  } catch (e) {
+    setStatus('Error (ошибка): ' + e.message, 'err');
+  }
+};
+
+document.getElementById('btnCopy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(jsonText.value);
+    setStatus('✓ copied (скопировано)', 'ok');
+  } catch {
+    jsonText.select();
+    document.execCommand('copy');
+    setStatus('✓ copied (скопировано)', 'ok');
+  }
+};
+
+/* ================= Auto Animate ================= */
+
+const chkAnimate = document.getElementById('chkAnimate');
+let lastJsonSync = 0;
+
+chkAnimate.onchange = () => {
+  if (chkAnimate.checked) {
+    /* анимация качается вокруг текущих поз */
+    for (const c of components) delete c._animBase;
+  } else {
+    updateJSONView(); // зафиксировать финальные значения
+  }
+};
+
+function animateArm(now) {
+  const t = now / 1000;
+  components.forEach((c, i) => {
+    if (c.type === 'link' || c.type === 'offset') return; // статика: без пересборки
+    const params = TYPES[c.type].params;
+    if (!c._animBase) {
+      c._animBase = {};
+      for (const p of params) c._animBase[p.key] = c[p.key] ?? p.def;
+    }
+    for (const [j, p] of params.entries()) {
+      const base = c._animBase[p.key];
+      const amp = (p.max - p.min) * 0.25;
+      const speed = 0.5 + ((i * 2 + j) % 4) * 0.22;
+      let v = base + amp * Math.sin(t * speed + i * 1.3 + j * 2.1);
+      v = Math.min(p.max, Math.max(p.min, v));
+      c[p.key] = p.step >= 1 ? Math.round(v) : +v.toFixed(2);
+      const s = c._sliders?.[p.key];
+      if (s) { s.slider.value = c[p.key]; s.val.textContent = c[p.key]; }
+    }
+    applyParam3D(c);
+  });
+  if (now - lastJsonSync > 300) { lastJsonSync = now; updateJSONView(); }
+}
+
+/* ================= Запуск ================= */
+
+buildArm();
+renderPanel();
+
+renderer.setAnimationLoop((now) => {
+  if (chkAnimate.checked) animateArm(now);
+  controls.update();
+  cameraAutoExpand();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
