@@ -60,18 +60,23 @@
     position: absolute; left: 12px; bottom: 10px;
     color: var(--muted); font-size: 12px; pointer-events: none;
   }
-  /* Переключатель анимации — левый верхний угол 3D-окна */
-  #animToggle {
+  /* Инструменты 3D-окна: переключатель анимации + ссылка — левый верхний угол */
+  #vpTools {
     position: absolute; left: 12px; top: 10px; z-index: 2;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  #animToggle, #btnShare {
     display: flex; align-items: center; gap: 8px;
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 13px;
-    font-size: 13.5px; font-weight: 600; color: var(--text); cursor: pointer;
+    font: 600 13.5px/1.45 "Segoe UI", system-ui, sans-serif;
+    color: var(--text); cursor: pointer;
     box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
     -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   }
-  #animToggle:hover { border-color: var(--accent); }
+  #animToggle:hover, #btnShare:hover { border-color: var(--accent); }
   #animToggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  #btnShare.done { border-color: var(--ok); color: var(--ok); }
   /* Подсказка после «Start New Project»: стрелка вверх, на кнопки добавления */
   #startHint {
     position: absolute; top: 14px; left: 132px; z-index: 3;
@@ -266,6 +271,39 @@
     font: 12px/1.5 Consolas, "Courier New", monospace;
     padding: 10px 12px; white-space: pre; overflow: auto;
   }
+
+  /* ---- Мобильный режим: тулбар компонентов сверху, 3D — главный, панель снизу ---- */
+  @media (max-width: 720px) {
+    body {
+      grid-template-columns: minmax(0, 1fr); /* min-content контента не должен распирать колонку */
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "toolbar"
+        "viewport"
+        "sidebar";
+      height: 100vh;
+      height: 100dvh; /* мобильные браузеры: без скрытия за адресной строкой */
+    }
+    #addRow {
+      flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+      padding: 8px 10px; gap: 6px; -webkit-overflow-scrolling: touch;
+    }
+    #addRow button { flex: none; padding: 7px 10px; font-size: 12.5px; }
+    #sidebar {
+      border-left: none; border-top: 1px solid var(--border);
+      max-height: 45dvh; min-height: 0;
+    }
+    #genRow { flex-direction: row; margin: 8px 10px 0; }
+    #genRow button {
+      flex: 1; min-width: 0; padding: 7px 8px; font-size: 13px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #sidebar h1 { flex-wrap: wrap; row-gap: 6px; }
+    #hint { display: none; }
+    #animToggle, #btnShare { padding: 6px 10px; font-size: 12.5px; }
+    #startHint { left: 12px; right: 12px; max-width: none; }
+    #jsonText { min-height: 120px; }
+  }
 </style>
 </head>
 <body>
@@ -273,7 +311,10 @@
 <div id="addRow"></div>
 
 <div id="viewport">
-  <label id="animToggle"><input type="checkbox" id="chkAnimate" checked><span id="animLbl">Animate</span></label>
+  <div id="vpTools">
+    <label id="animToggle"><input type="checkbox" id="chkAnimate" checked><span id="animLbl">Animate</span></label>
+    <button id="btnShare"></button>
+  </div>
   <div id="startHint" hidden></div>
   <div id="hint"></div>
 </div>
@@ -337,7 +378,11 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* Версия проекта — инкрементируется при каждом заметном изменении */
-const VERSION = '1.0.7';
+const VERSION = '1.1.1';
+
+/* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
+   на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
+const SHARE_BASE = 'https://ibog.github.io/robot_arm_builder/';
 
 /* ================= Локализация: English / Русский ================= */
 
@@ -375,6 +420,10 @@ const STR = {
   copy:       { en: 'Copy',                           ru: 'Копировать' },
   applied:    { en: '✓ applied',                      ru: '✓ применено' },
   copied:     { en: '✓ copied',                       ru: '✓ скопировано' },
+  share:      { en: '🔗 Share',                       ru: '🔗 Ссылка' },
+  shareTip:   { en: 'Copy a link that recreates this arm',
+                ru: 'Скопировать ссылку, воссоздающую эту руку' },
+  shareCopied:{ en: '✓ link copied',                  ru: '✓ ссылка скопирована' },
   errPrefix:  { en: e => `Error: ${e}`,               ru: e => `Ошибка: ${e}` },
   errArray:   { en: 'an array of components is expected',
                 ru: 'ожидается массив компонентов' },
@@ -1483,18 +1532,23 @@ function setStatus(text, cls) {
   if (text) setTimeout(() => { if (jsonStatus.textContent === text) { jsonStatus.textContent = ''; jsonStatus.className = ''; } }, 3000);
 }
 
+/* Валидация конфигурации (Apply и ?config= из URL): неизвестный тип — ошибка,
+   значения зажимаются в min/max, пропущенные параметры добираются из def */
+function validateConfig(data) {
+  if (!Array.isArray(data)) throw new Error(t('errArray'));
+  for (const [i, c] of data.entries()) {
+    if (!c || !TYPES[c.type]) throw new Error(t('errType', i + 1, c && c.type));
+    for (const p of TYPES[c.type].params) {
+      if (c[p.key] === undefined) c[p.key] = p.def;
+      c[p.key] = Math.min(p.max, Math.max(p.min, +c[p.key] || 0));
+    }
+  }
+  return data;
+}
+
 document.getElementById('btnApply').onclick = () => {
   try {
-    const data = JSON.parse(jsonText.value);
-    if (!Array.isArray(data)) throw new Error(t('errArray'));
-    for (const [i, c] of data.entries()) {
-      if (!c || !TYPES[c.type]) throw new Error(t('errType', i + 1, c && c.type));
-      for (const p of TYPES[c.type].params) {
-        if (c[p.key] === undefined) c[p.key] = p.def;
-        c[p.key] = Math.min(p.max, Math.max(p.min, +c[p.key] || 0));
-      }
-    }
-    components = data;
+    components = validateConfig(JSON.parse(jsonText.value));
     buildArm();
     renderPanel();
     setStatus(t('applied'), 'ok');
@@ -1503,16 +1557,56 @@ document.getElementById('btnApply').onclick = () => {
   }
 };
 
-document.getElementById('btnCopy').onclick = async () => {
+async function copyText(text) {
   try {
-    await navigator.clipboard.writeText(jsonText.value);
-    setStatus(t('copied'), 'ok');
+    await navigator.clipboard.writeText(text);
   } catch {
+    /* file:// без clipboard API — через скрытое выделение textarea */
+    const prev = jsonText.value;
+    jsonText.value = text;
     jsonText.select();
     document.execCommand('copy');
-    setStatus(t('copied'), 'ok');
+    jsonText.value = prev;
   }
+}
+
+document.getElementById('btnCopy').onclick = async () => {
+  await copyText(jsonText.value);
+  setStatus(t('copied'), 'ok');
 };
+
+/* ---- Ссылка на текущую конфигурацию: base64url(JSON) в параметре ?config= ---- */
+
+function shareURL() {
+  const b64 = btoa(JSON.stringify(cleanConfig()))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${SHARE_BASE}?config=${b64}`;
+}
+
+const btnShare = document.getElementById('btnShare');
+btnShare.onclick = async () => {
+  await copyText(shareURL()); // ссылка сразу уходит в буфер обмена
+  btnShare.textContent = t('shareCopied');
+  btnShare.classList.add('done');
+  setTimeout(() => {
+    btnShare.textContent = t('share');
+    btnShare.classList.remove('done');
+  }, 2000);
+};
+
+/* Восстановление руки из ?config= (или #config=) при открытии по ссылке */
+function loadFromURL() {
+  try {
+    const q = new URLSearchParams(location.search).get('config')
+      || new URLSearchParams(location.hash.replace(/^#\??/, '')).get('config');
+    if (!q) return false;
+    const b64 = q.replace(/-/g, '+').replace(/_/g, '/');
+    components = validateConfig(JSON.parse(atob(b64)));
+    return true;
+  } catch {
+    return false; // битый параметр — остаётся стартовая рука
+  }
+}
 
 /* ================= Animate ================= */
 
@@ -1616,6 +1710,9 @@ function applyI18n() {
   document.getElementById('jsonTitle').textContent = t('jsonTitle');
   document.getElementById('btnApply').textContent = t('apply');
   document.getElementById('btnCopy').textContent = t('copy');
+  const btnShare = document.getElementById('btnShare');
+  btnShare.textContent = t('share');
+  btnShare.title = t('shareTip');
   document.getElementById('bomTitle').textContent = t('bomTitle');
   document.getElementById('bomNote').textContent = t('bomNote');
   startHint.textContent = t('startHint');
@@ -1643,8 +1740,10 @@ for (const b of document.querySelectorAll('#langSw button')) {
 applyI18n();
 applyTheme();
 syncAnimToggle();
+const fromLink = loadFromURL(); // рука из ?config= — раньше первой сборки
 buildArm();
 renderPanel();
+if (fromLink) fitCameraToArm();
 
 renderer.setAnimationLoop((now) => {
   if (chkAnimate.checked) animateArm(now);
