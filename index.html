@@ -378,7 +378,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* Версия проекта — инкрементируется при каждом заметном изменении */
-const VERSION = '1.1.1';
+const VERSION = '1.1.2';
 
 /* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
    на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
@@ -1557,22 +1557,34 @@ document.getElementById('btnApply').onclick = () => {
   }
 };
 
+/* Копирование в буфер: clipboard API → временная textarea (execCommand;
+   выделять #jsonText нельзя — на мобильных его вкладка скрыта и select()
+   не срабатывает) → системная шторка «Поделиться», если и это не вышло */
 async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    /* file:// без clipboard API — через скрытое выделение textarea */
-    const prev = jsonText.value;
-    jsonText.value = text;
-    jsonText.select();
-    document.execCommand('copy');
-    jsonText.value = prev;
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* дальше фолбэк */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.readOnly = true;
+  /* font-size 16px — iOS не зумит страницу при фокусе */
+  ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;font-size:16px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, text.length); // iOS игнорирует select()
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* нет execCommand */ }
+  ta.remove();
+  if (!ok && navigator.share) {
+    try {
+      await navigator.share(/^https?:/.test(text) ? { url: text } : { text });
+      ok = true;
+    } catch { /* пользователь закрыл шторку */ }
   }
+  return ok;
 }
 
 document.getElementById('btnCopy').onclick = async () => {
-  await copyText(jsonText.value);
-  setStatus(t('copied'), 'ok');
+  if (await copyText(jsonText.value)) setStatus(t('copied'), 'ok');
 };
 
 /* ---- Ссылка на текущую конфигурацию: base64url(JSON) в параметре ?config= ---- */
@@ -1585,7 +1597,7 @@ function shareURL() {
 
 const btnShare = document.getElementById('btnShare');
 btnShare.onclick = async () => {
-  await copyText(shareURL()); // ссылка сразу уходит в буфер обмена
+  if (!await copyText(shareURL())) return; // ссылка сразу уходит в буфер обмена
   btnShare.textContent = t('shareCopied');
   btnShare.classList.add('done');
   setTimeout(() => {
