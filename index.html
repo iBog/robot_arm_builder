@@ -494,6 +494,7 @@
     <table id="bomTable"></table>
   </div>
   <div id="licenseBar">
+    <a id="authorLink" href="mailto:ibog.dev@yandex.by"></a> ·
     <a id="licenseLink" href="https://creativecommons.org/licenses/by-nc-nd/4.0/"
       target="_blank" rel="license noopener"></a>
   </div>
@@ -615,8 +616,10 @@ const STR = {
       + '🛒 Вкладка «Закупка» — покажет, из каких настоящих деталей её собрать и сколько это примерно стоит.\n\n'
       + 'Теперь ты — конструктор роботов. Твори!' },
   tutBtnDone: { en: 'Awesome!',                       ru: 'Здорово!' },
-  license:    { en: '© iBog · Licensed under CC BY-NC-ND 4.0',
-                ru: '© iBog · Лицензия CC BY-NC-ND 4.0' },
+  author:     { en: '© iBog',                         ru: '© iBog' },
+  authorTip:  { en: 'Contact the author: ibog.dev@yandex.by',
+                ru: 'Написать автору: ibog.dev@yandex.by' },
+  license:    { en: 'Licensed under CC BY-NC-ND 4.0', ru: 'Лицензия CC BY-NC-ND 4.0' },
   licenseTip: { en: 'Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International',
                 ru: 'Creative Commons «С указанием авторства — Некоммерческая — Без производных» 4.0' },
   errPrefix:  { en: e => `Error: ${e}`,               ru: e => `Ошибка: ${e}` },
@@ -2471,6 +2474,9 @@ function applyI18n() {
   document.getElementById('btnPanel').title = t('panelTip');
   const bExpand = document.getElementById('btnExpand');
   bExpand.title = t(document.body.classList.contains('expanded') ? 'collapseTip' : 'expandTip');
+  const authorLink = document.getElementById('authorLink');
+  authorLink.textContent = t('author');
+  authorLink.title = t('authorTip');
   const licLink = document.getElementById('licenseLink');
   licLink.textContent = t('license');
   licLink.title = t('licenseTip');
