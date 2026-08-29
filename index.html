@@ -584,8 +584,8 @@ const STR = {
   tutAskTitle:{ en: '👋 Hi!',                         ru: '👋 Привет!' },
   tutAskText: { en: 'I can walk you through building your first robo-arm, or just tell you what this app is about.',
                 ru: 'Могу провести тебя по шагам и собрать первую робо-руку, а могу просто рассказать, что это за приложение.' },
-  tutBtnGuide:{ en: '🧭 Want a hand figuring this out?', ru: '🧭 Хочешь, помогу разобраться, что тут к чему?' },
-  tutBtnWhat: { en: '🤔 What is this thing anyway?',  ru: '🤔 Что это вообще такое?' },
+  tutBtnGuide:{ en: '🧭 Step-by-step guide to get started', ru: '🧭 Пошаговая инструкция как начать' },
+  tutBtnWhat: { en: 'ℹ️ About this app',              ru: 'ℹ️ Общая информация о приложении' },
   tutBtnLater:{ en: 'Later',                          ru: 'Позже' },
   tutAboutTitle: { en: '🦾 What is this?',            ru: '🦾 Что это такое?' },
   tutAboutText: {
@@ -2322,8 +2322,8 @@ function showTutModal(mode) {
   if (mode === 'ask') {
     title.textContent = t('tutAskTitle');
     text.textContent = t('tutAskText');
-    mk(t('tutBtnGuide'), startTutorial, true);
     mk(t('tutBtnWhat'), () => showTutModal('about'));
+    mk(t('tutBtnGuide'), startTutorial, true);
     mk(t('tutBtnLater'), hideTutModal);
   } else if (mode === 'about') {
     title.textContent = t('tutAboutTitle');
