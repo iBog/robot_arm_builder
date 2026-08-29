@@ -66,7 +66,7 @@
     position: absolute; left: 12px; top: 10px; z-index: 2;
     display: flex; gap: 8px; flex-wrap: wrap;
   }
-  #animToggle, #btnShare {
+  #animToggle, #btnShare, #btnUndo {
     display: flex; align-items: center; gap: 8px;
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 13px;
@@ -75,9 +75,28 @@
     box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
     -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   }
-  #animToggle:hover, #btnShare:hover { border-color: var(--accent); }
+  #animToggle:hover, #btnShare:hover, #btnUndo:hover { border-color: var(--accent); }
   #animToggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   #btnShare.done { border-color: var(--ok); color: var(--ok); }
+  #btnUndo[hidden] { display: none; } /* display:flex перебивает атрибут hidden */
+
+  /* Управление камерой — правый нижний угол 3D-окна, компактно */
+  #camTools {
+    position: absolute; right: 12px; bottom: 10px; z-index: 2;
+    display: flex; gap: 8px;
+  }
+  #fitToggle, #btnExpand {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--overlay); border: 1px solid var(--border);
+    border-radius: 7px; padding: 5px 9px;
+    font: 600 12px/1.4 "Segoe UI", system-ui, sans-serif;
+    color: var(--text); cursor: pointer;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  }
+  #fitToggle input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; margin: 0; }
+  #fitToggle:hover, #btnExpand:hover { border-color: var(--accent); }
+  #fitToggle.on, #btnExpand.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   /* Подсказка после «Start New Project»: стрелка вверх, на кнопки добавления */
   #startHint {
     position: absolute; top: 14px; left: 132px; z-index: 3;
@@ -252,6 +271,15 @@
     font-weight: 700; color: var(--accent); font-size: 12.5px; padding-top: 5px;
   }
 
+  /* ---- Лицензия — прижата к низу правой панели ---- */
+  #licenseBar {
+    flex: none; margin-top: auto;
+    padding: 6px 12px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); text-align: center;
+  }
+  #licenseBar a { color: var(--muted); text-decoration: none; }
+  #licenseBar a:hover { color: var(--accent); text-decoration: underline; }
+
   /* ---- JSON под 3D-окном ---- */
   #jsonarea { background: var(--panel); }
   #jsonbar {
@@ -309,6 +337,16 @@
     #startHint { left: 12px; right: 12px; max-width: none; }
     #jsonText { min-height: 120px; }
   }
+
+  /* ---- Развёрнутый 3D-вид: видны только шапка и вьюпорт ---- */
+  body.expanded {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "viewport";
+  }
+  body.expanded #addRow, body.expanded #sidebar { display: none; }
 </style>
 </head>
 <body>
@@ -337,6 +375,11 @@
   <div id="vpTools">
     <label id="animToggle"><input type="checkbox" id="chkAnimate" checked><span id="animLbl">Animate</span></label>
     <button id="btnShare"></button>
+    <button id="btnUndo" hidden></button>
+  </div>
+  <div id="camTools">
+    <label id="fitToggle"><input type="checkbox" id="chkFit" checked><span id="fitLbl">Fit</span></label>
+    <button id="btnExpand">⛶</button>
   </div>
   <div id="startHint" hidden></div>
   <div id="hint"></div>
@@ -368,6 +411,10 @@
     <div class="note" id="bomNote"></div>
     <table id="bomTable"></table>
   </div>
+  <div id="licenseBar">
+    <a id="licenseLink" href="https://creativecommons.org/licenses/by-nc-nd/4.0/"
+      target="_blank" rel="license noopener"></a>
+  </div>
 </div>
 
 <script type="importmap">
@@ -384,7 +431,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* Версия проекта — инкрементируется при каждом заметном изменении */
-const VERSION = '1.1.2';
+const VERSION = '1.2.0';
 
 /* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
    на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
@@ -430,6 +477,18 @@ const STR = {
   shareTip:   { en: 'Copy a link that recreates this arm',
                 ru: 'Скопировать ссылку, воссоздающую эту руку' },
   shareCopied:{ en: '✓ link copied',                  ru: '✓ ссылка скопирована' },
+  undo:       { en: '↩️ Undo',                        ru: '↩️ Отмена' },
+  undoTip:    { en: 'Revert the last change to the arm',
+                ru: 'Откатить последнее изменение руки' },
+  fit:        { en: 'Fit',                            ru: 'Вписать' },
+  fitTip:     { en: 'Auto-fit the whole arm into the view',
+                ru: 'Автоматически вписывать всю руку в кадр' },
+  expandTip:  { en: 'Expand the 3D view',             ru: 'Развернуть 3D-вид на всё окно' },
+  collapseTip:{ en: 'Back to the normal layout',      ru: 'Вернуть обычный вид' },
+  license:    { en: '© iBog · Licensed under CC BY-NC-ND 4.0',
+                ru: '© iBog · Лицензия CC BY-NC-ND 4.0' },
+  licenseTip: { en: 'Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International',
+                ru: 'Creative Commons «С указанием авторства — Некоммерческая — Без производных» 4.0' },
   errPrefix:  { en: e => `Error: ${e}`,               ru: e => `Ошибка: ${e}` },
   errArray:   { en: 'an array of components is expected',
                 ru: 'ожидается массив компонентов' },
@@ -1059,6 +1118,7 @@ function renderAddRow() {
     b.onclick = () => {
       const c = { type };
       for (const p of ty.params) c[p.key] = p.def;
+      pushUndo();
       components.push(c);
       buildArm();
       renderPanel();
@@ -1104,7 +1164,7 @@ function renderPanel() {
     }
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = '✕'; del.title = t('remove');
-    del.onclick = () => { components.splice(i, 1); buildArm(); renderPanel(); };
+    del.onclick = () => { pushUndo(); components.splice(i, 1); buildArm(); renderPanel(); };
     head.appendChild(del);
     card.appendChild(head);
 
@@ -1239,6 +1299,7 @@ function generateArm() {
       : { type: 'suction', power: randi(0, 100) });
   }
 
+  pushUndo();
   components = c;
   buildArm();
   renderPanel();
@@ -1251,6 +1312,7 @@ document.getElementById('btnGenerate').onclick = generateArm;
 
 /* очищает цепочку и возвращает стартовый вид: чистый лист */
 function newProject() {
+  if (components.length) pushUndo();
   components = [];
   buildArm();
   renderPanel();
@@ -1554,7 +1616,9 @@ function validateConfig(data) {
 
 document.getElementById('btnApply').onclick = () => {
   try {
-    components = validateConfig(JSON.parse(jsonText.value));
+    const data = validateConfig(JSON.parse(jsonText.value));
+    pushUndo();
+    components = data;
     buildArm();
     renderPanel();
     setStatus(t('applied'), 'ok');
@@ -1612,6 +1676,29 @@ btnShare.onclick = async () => {
   }, 2000);
 };
 
+/* ================= Отмена: откат структурных изменений руки ================= */
+
+/* Снимки cleanConfig() перед каждым изменением состава (добавление, удаление,
+   генерация, Apply, новый проект). Кнопка видна, только когда есть что отменять. */
+const undoStack = [];
+const btnUndo = document.getElementById('btnUndo');
+
+function pushUndo() {
+  const snap = JSON.stringify(cleanConfig());
+  if (undoStack[undoStack.length - 1] === snap) return; // состав не менялся
+  undoStack.push(snap);
+  if (undoStack.length > 50) undoStack.shift();
+  btnUndo.hidden = false;
+}
+
+btnUndo.onclick = () => {
+  if (!undoStack.length) return;
+  components = JSON.parse(undoStack.pop());
+  btnUndo.hidden = !undoStack.length;
+  buildArm();
+  renderPanel();
+};
+
 /* Восстановление руки из ?config= (или #config=) при открытии по ссылке */
 function loadFromURL() {
   try {
@@ -1635,6 +1722,22 @@ let lastJsonSync = 0;
 function syncAnimToggle() {
   document.getElementById('animToggle').classList.toggle('on', chkAnimate.checked);
 }
+
+/* ---- Fit: авто-вписывание руки в кадр (выкл — полностью свободная камера) ---- */
+const chkFit = document.getElementById('chkFit');
+
+function syncFitToggle() {
+  document.getElementById('fitToggle').classList.toggle('on', chkFit.checked);
+}
+chkFit.onchange = syncFitToggle;
+
+/* ---- Развёрнутый 3D-вид: скрывает всё, кроме шапки и вьюпорта ---- */
+const btnExpand = document.getElementById('btnExpand');
+btnExpand.onclick = () => {
+  const on = document.body.classList.toggle('expanded');
+  btnExpand.classList.toggle('on', on);
+  btnExpand.title = t(on ? 'collapseTip' : 'expandTip');
+};
 
 chkAnimate.onchange = () => {
   syncAnimToggle();
@@ -1731,6 +1834,16 @@ function applyI18n() {
   const btnShare = document.getElementById('btnShare');
   btnShare.textContent = t('share');
   btnShare.title = t('shareTip');
+  const bUndo = document.getElementById('btnUndo');
+  bUndo.textContent = t('undo');
+  bUndo.title = t('undoTip');
+  document.getElementById('fitLbl').textContent = t('fit');
+  document.getElementById('fitToggle').title = t('fitTip');
+  const bExpand = document.getElementById('btnExpand');
+  bExpand.title = t(document.body.classList.contains('expanded') ? 'collapseTip' : 'expandTip');
+  const licLink = document.getElementById('licenseLink');
+  licLink.textContent = t('license');
+  licLink.title = t('licenseTip');
   document.getElementById('bomTitle').textContent = t('bomTitle');
   document.getElementById('bomNote').textContent = t('bomNote');
   startHint.textContent = t('startHint');
@@ -1758,6 +1871,7 @@ for (const b of document.querySelectorAll('#langSw button')) {
 applyI18n();
 applyTheme();
 syncAnimToggle();
+syncFitToggle();
 const fromLink = loadFromURL(); // рука из ?config= — раньше первой сборки
 buildArm();
 renderPanel();
@@ -1766,7 +1880,7 @@ if (fromLink) fitCameraToArm();
 renderer.setAnimationLoop((now) => {
   if (chkAnimate.checked) animateArm(now);
   controls.update();
-  cameraAutoExpand();
+  if (chkFit.checked) cameraAutoExpand();
   renderer.render(scene, camera);
 });
 </script>
