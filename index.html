@@ -91,7 +91,7 @@
     position: absolute; right: 12px; bottom: 10px; z-index: 2;
     display: flex; gap: 8px;
   }
-  #fitToggle, #btnExpand {
+  #fitToggle, #btnExpand, #btnPanel {
     display: flex; align-items: center; gap: 6px;
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 7px; padding: 5px 9px;
@@ -101,8 +101,19 @@
     -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   }
   #fitToggle input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; margin: 0; }
-  #fitToggle:hover, #btnExpand:hover { border-color: var(--accent); }
-  #fitToggle.on, #btnExpand.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  #fitToggle:hover, #btnExpand:hover, #btnPanel:hover { border-color: var(--accent); }
+  #fitToggle.on, #btnExpand.on, #btnPanel.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* ---- Свёрнутая панель Parts/JSON/BOM: остаются шапка, тулбар и 3D ---- */
+  body.panelCollapsed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "toolbar"
+      "viewport";
+  }
+  body.panelCollapsed #sidebar { display: none; }
   /* Подсказка после «Start New Project»: стрелка вверх, на кнопки добавления */
   #startHint {
     position: absolute; top: 14px; left: 132px; z-index: 3;
@@ -451,6 +462,7 @@
   <div id="tutHint" hidden></div>
   <div id="camTools">
     <label id="fitToggle"><input type="checkbox" id="chkFit" checked><span id="fitLbl">Fit</span></label>
+    <button id="btnPanel">▤</button>
     <button id="btnExpand">⛶</button>
   </div>
   <div id="startHint" hidden></div>
@@ -566,6 +578,7 @@ const STR = {
   fit:        { en: 'Fit',                            ru: 'Вписать' },
   fitTip:     { en: 'Auto-fit the whole arm into the view',
                 ru: 'Автоматически вписывать всю руку в кадр' },
+  panelTip:   { en: 'Show/hide the parts panel',      ru: 'Показать/скрыть панель деталей' },
   expandTip:  { en: 'Expand the 3D view',             ru: 'Развернуть 3D-вид на всё окно' },
   collapseTip:{ en: 'Back to the normal layout',      ru: 'Вернуть обычный вид' },
   helpTip:    { en: 'Help & tutorial',                ru: 'Помощь и обучение' },
@@ -2197,6 +2210,16 @@ function syncFitToggle() {
 }
 chkFit.onchange = syncFitToggle;
 
+/* ---- Сворачиваемая панель Parts/JSON/BOM ---- */
+const btnPanel = document.getElementById('btnPanel');
+
+function setPanelCollapsed(v) {
+  document.body.classList.toggle('panelCollapsed', v);
+  btnPanel.classList.toggle('on', v);
+}
+
+btnPanel.onclick = () => setPanelCollapsed(!document.body.classList.contains('panelCollapsed'));
+
 /* ---- Развёрнутый 3D-вид: скрывает всё, кроме шапки и вьюпорта ---- */
 const btnExpand = document.getElementById('btnExpand');
 btnExpand.onclick = () => {
@@ -2341,6 +2364,7 @@ function startTutorial() {
   hideTutModal();
   document.body.classList.remove('expanded'); // панель кнопок должна быть видна
   btnExpand.classList.remove('on');
+  setPanelCollapsed(true); // панель не должна закрывать руку (особенно на мобильных)
   if (components.length) pushUndo();
   components = [];
   buildArm();
@@ -2376,6 +2400,7 @@ function cancelTutorial() {
   tutStep = -1;
   clearTutHighlight();
   tutHint.hidden = true;
+  setPanelCollapsed(false); // обучение закончено — вернуть панель
 }
 
 /* ================= Применение темы ================= */
@@ -2444,6 +2469,7 @@ function applyI18n() {
   bUndo.title = t('undoTip');
   document.getElementById('fitLbl').textContent = t('fit');
   document.getElementById('fitToggle').title = t('fitTip');
+  document.getElementById('btnPanel').title = t('panelTip');
   const bExpand = document.getElementById('btnExpand');
   bExpand.title = t(document.body.classList.contains('expanded') ? 'collapseTip' : 'expandTip');
   const licLink = document.getElementById('licenseLink');
