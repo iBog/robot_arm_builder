@@ -104,16 +104,11 @@
   #fitToggle:hover, #btnExpand:hover, #btnPanel:hover { border-color: var(--accent); }
   #fitToggle.on, #btnExpand.on, #btnPanel.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
-  /* ---- Свёрнутая панель Parts/JSON/BOM: остаются шапка, тулбар и 3D ---- */
-  body.panelCollapsed {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      "header"
-      "toolbar"
-      "viewport";
-  }
-  body.panelCollapsed #sidebar { display: none; }
+  /* ---- Свёрнутая панель: от Parts/JSON/BOM остаются только кнопки
+     Generate / Start New; на десктопе колонка сужается под них ---- */
+  body.panelCollapsed { grid-template-columns: 1fr 230px; }
+  body.panelCollapsed #sidebar > :not(#genRow) { display: none; }
+  body.panelCollapsed #genRow { margin-bottom: 10px; }
   /* Подсказка после «Start New Project»: стрелка вверх, на кнопки добавления */
   #startHint {
     position: absolute; top: 14px; left: 132px; z-index: 3;
@@ -416,6 +411,9 @@
     #animToggle, #btnShare { padding: 6px 10px; font-size: 12.5px; }
     #startHint { left: 12px; right: 12px; max-width: none; }
     #tutHint { top: 96px; left: 12px; right: 12px; max-width: none; } /* под двумя рядами кнопок */
+    /* свёрнутая панель на мобильном: колонка одна, снизу только кнопки */
+    body.panelCollapsed { grid-template-columns: minmax(0, 1fr); }
+    body.panelCollapsed #genRow { margin-bottom: 8px; }
     #jsonText { min-height: 120px; }
   }
 
@@ -1971,7 +1969,8 @@ function dammValid(digits) {
    контрольной цифры} либо null */
 function codeBody(str) {
   const d = String(str).replace(/\D+/g, '');
-  if (d.length < 3 || !CODE_VERSIONS[d[0]] || !dammValid(d)) return null;
+  /* минимум 2 цифры: версия + контрольная (пустое тело = пустая рука) */
+  if (d.length < 2 || !CODE_VERSIONS[d[0]] || !dammValid(d)) return null;
   return { tw: CODE_VERSIONS[d[0]], body: d.slice(1, -1) };
 }
 
@@ -2075,7 +2074,7 @@ function midParam(p) {
 
 function decodeStructCode(str) {
   const parsed = codeBody(str);
-  if (parsed === null || !parsed.body.length) return null;
+  if (parsed === null) return null;
   const { tw, body: d } = parsed;
   if (d.length % tw) return null;
   const out = [];
@@ -2509,8 +2508,10 @@ checkCodeSpec(); // формат ссылок v1 не должен разъез�
 const fromLink = loadFromURL(); // рука из ссылки — раньше первой сборки
 buildArm();
 renderPanel();
-if (fromLink) fitCameraToArm();
-else if (badLink) showBadLink(); // код был, но битый: пустая рука + предупреждение
+if (fromLink) {
+  fitCameraToArm();
+  if (!components.length) showStartHint(); // ссылка на пустую руку — подсказать, с чего начать
+} else if (badLink) showBadLink(); // код был, но битый: пустая рука + предупреждение
 
 renderer.setAnimationLoop((now) => {
   if (chkAnimate.checked) animateArm(now);
