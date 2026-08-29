@@ -66,7 +66,7 @@
     position: absolute; left: 12px; top: 10px; z-index: 2;
     display: flex; gap: 8px; flex-wrap: wrap;
   }
-  #animToggle, #btnShare, #btnUndo {
+  #animToggle, #btnShare, #btnUndo, #btnHelp {
     display: flex; align-items: center; gap: 8px;
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 13px;
@@ -75,7 +75,13 @@
     box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
     -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   }
-  #animToggle:hover, #btnShare:hover, #btnUndo:hover { border-color: var(--accent); }
+  #animToggle:hover, #btnShare:hover, #btnUndo:hover, #btnHelp:hover { border-color: var(--accent); }
+  #btnHelp { font-weight: 800; padding: 7px 12px; }
+  /* долгое нажатие по «Ссылке»: без выделения текста и системного меню */
+  #btnShare {
+    user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; touch-action: manipulation;
+  }
   #animToggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   #btnShare.done { border-color: var(--ok); color: var(--ok); }
   #btnUndo[hidden] { display: none; } /* display:flex перебивает атрибут hidden */
@@ -117,6 +123,66 @@
   /* вариант-предупреждение: битый код в ссылке */
   #startHint.warn { border-color: var(--danger); }
   #startHint.warn::before { border-left-color: var(--danger); border-top-color: var(--danger); }
+  /* ---- Подсказка шага обучения — стиль как у #startHint ---- */
+  #tutHint {
+    position: absolute; top: 58px; left: 12px; z-index: 3; /* ниже ряда кнопок #vpTools */
+    max-width: 320px;
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--accent); border-radius: 8px;
+    padding: 8px 11px; font-size: 12.5px; line-height: 1.45;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+    animation: hintIn .25s ease-out;
+  }
+  #tutHint::before {
+    content: ''; position: absolute; top: -7px; left: 20px;
+    width: 12px; height: 12px; background: var(--panel2);
+    border-left: 1px solid var(--accent); border-top: 1px solid var(--accent);
+    transform: rotate(45deg);
+  }
+  #tutHint .tut-step { color: var(--accent); font-weight: 700; }
+  #tutHint .tut-exit {
+    float: right; margin-left: 8px; cursor: pointer;
+    color: var(--muted); font-weight: 700;
+  }
+  #tutHint .tut-exit:hover { color: var(--danger); }
+  /* подсвеченная кнопка-цель текущего шага */
+  #addRow button.tut-target {
+    /* !important: перебиваем инлайновый цвет рамки, заданный кнопке по типу */
+    border-color: var(--accent) !important;
+    animation: tutPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes tutPulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+    50% { box-shadow: 0 0 0 7px var(--accent-soft); }
+  }
+  /* ---- Модальный диалог обучения ---- */
+  #tutModal {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, .45);
+  }
+  #tutModal[hidden] { display: none; }
+  .tut-box {
+    max-width: 460px; margin: 16px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, .4);
+  }
+  .tut-box h3 { font-size: 16px; margin-bottom: 8px; }
+  .tut-box p { font-size: 13.5px; line-height: 1.5; white-space: pre-line; }
+  .tut-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .tut-actions button {
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel2); color: var(--text);
+    padding: 9px 12px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    text-align: left;
+  }
+  .tut-actions button:hover { border-color: var(--accent); }
+  .tut-actions button.primary {
+    background: linear-gradient(135deg, #2b6cb0, #4da3ff);
+    border: none; color: #fff;
+  }
+  .tut-actions button.primary:hover { filter: brightness(1.15); }
   @keyframes hintIn { from { opacity: 0; transform: translateY(-8px); } }
   #animToggle input { accent-color: var(--accent); width: 17px; height: 17px; cursor: pointer; }
 
@@ -338,6 +404,7 @@
     #hint { display: none; }
     #animToggle, #btnShare { padding: 6px 10px; font-size: 12.5px; }
     #startHint { left: 12px; right: 12px; max-width: none; }
+    #tutHint { top: 96px; left: 12px; right: 12px; max-width: none; } /* под двумя рядами кнопок */
     #jsonText { min-height: 120px; }
   }
 
@@ -376,10 +443,12 @@
 
 <div id="viewport">
   <div id="vpTools">
+    <button id="btnHelp">?</button>
     <label id="animToggle"><input type="checkbox" id="chkAnimate" checked><span id="animLbl">Animate</span></label>
     <button id="btnShare"></button>
     <button id="btnUndo" hidden></button>
   </div>
+  <div id="tutHint" hidden></div>
   <div id="camTools">
     <label id="fitToggle"><input type="checkbox" id="chkFit" checked><span id="fitLbl">Fit</span></label>
     <button id="btnExpand">⛶</button>
@@ -420,6 +489,14 @@
   </div>
 </div>
 
+<div id="tutModal" hidden>
+  <div class="tut-box">
+    <h3 id="tutTitle"></h3>
+    <p id="tutText"></p>
+    <div class="tut-actions" id="tutActions"></div>
+  </div>
+</div>
+
 <script type="importmap">
 {
   "imports": {
@@ -434,7 +511,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* Версия проекта — инкрементируется при каждом заметном изменении */
-const VERSION = '1.3.0';
+const VERSION = '1.5.0';
 
 /* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
    на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
@@ -479,9 +556,10 @@ const STR = {
   applied:    { en: '✓ applied',                      ru: '✓ применено' },
   copied:     { en: '✓ copied',                       ru: '✓ скопировано' },
   share:      { en: '🔗 Share',                       ru: '🔗 Ссылка' },
-  shareTip:   { en: 'Copy a link that recreates this arm',
-                ru: 'Скопировать ссылку, воссоздающую эту руку' },
+  shareTip:   { en: 'Copy a link that recreates this arm. Long press — a short link with the structure only (default poses)',
+                ru: 'Скопировать ссылку, воссоздающую эту руку. Долгое нажатие — короткая ссылка только с составом (позы по умолчанию)' },
   shareCopied:{ en: '✓ link copied',                  ru: '✓ ссылка скопирована' },
+  shortCopied:{ en: '✓ short link copied',            ru: '✓ короткая ссылка скопирована' },
   undo:       { en: '↩️ Undo',                        ru: '↩️ Отмена' },
   undoTip:    { en: 'Revert the last change to the arm',
                 ru: 'Откатить последнее изменение руки' },
@@ -490,6 +568,42 @@ const STR = {
                 ru: 'Автоматически вписывать всю руку в кадр' },
   expandTip:  { en: 'Expand the 3D view',             ru: 'Развернуть 3D-вид на всё окно' },
   collapseTip:{ en: 'Back to the normal layout',      ru: 'Вернуть обычный вид' },
+  helpTip:    { en: 'Help & tutorial',                ru: 'Помощь и обучение' },
+  tutAskTitle:{ en: '👋 Hi!',                         ru: '👋 Привет!' },
+  tutAskText: { en: 'I can walk you through building your first robo-arm, or just tell you what this app is about.',
+                ru: 'Могу провести тебя по шагам и собрать первую робо-руку, а могу просто рассказать, что это за приложение.' },
+  tutBtnGuide:{ en: '🧭 Want a hand figuring this out?', ru: '🧭 Хочешь, помогу разобраться, что тут к чему?' },
+  tutBtnWhat: { en: '🤔 What is this thing anyway?',  ru: '🤔 Что это вообще такое?' },
+  tutBtnLater:{ en: 'Later',                          ru: 'Позже' },
+  tutAboutTitle: { en: '🦾 What is this?',            ru: '🦾 Что это такое?' },
+  tutAboutText: {
+    en: 'This is a robo-arm builder — you design real robot manipulators, like the ones in factories and labs!\n\n'
+      + 'Build your own arm from blocks: turntables, joints, links and grippers. Drag the sliders — and the arm comes alive right on the screen. You don\'t need to know anything in advance: just try things, nothing can break 😊\n\n'
+      + 'And when you like your arm, the app shows which real parts it takes and roughly what they cost. Many engineers started exactly like this!',
+    ru: 'Это конструктор робо-рук — настоящих роботов-манипуляторов, как на заводах и в лабораториях!\n\n'
+      + 'Собери свою руку из деталей: поворотных столов, суставов, звеньев и схватов. Покрути слайдеры — и рука оживёт прямо на экране. Заранее ничего знать не нужно: просто пробуй, сломать тут нечего 😊\n\n'
+      + 'А когда рука понравится — приложение покажет, из каких настоящих деталей её собрать и сколько они примерно стоят. Многие инженеры начинали именно так!' },
+  tutBtnTry:  { en: 'Let\'s try it! 🚀',              ru: 'Давай попробуем! 🚀' },
+  tutBtnOk:   { en: 'Got it',                         ru: 'Понятно' },
+  tutStepTitle: { en: (i, n) => `Step ${i} of ${n}`,  ru: (i, n) => `Шаг ${i} из ${n}` },
+  tutPress:   { en: name => `Press the "+ ${name}" button above 👆`,
+                ru: name => `Нажми кнопку «+ ${name}» наверху 👆` },
+  tutWrong:   { en: name => `Oops, not that one — we need "+ ${name}" 😊`,
+                ru: name => `Ой, не та кнопка — нам нужна «+ ${name}» 😊` },
+  tutExitTip: { en: 'Quit the tutorial',              ru: 'Выйти из обучения' },
+  tutDoneTitle: { en: '🎉 Congratulations!',          ru: '🎉 Поздравляем!' },
+  tutDoneText: {
+    en: 'You\'ve built your first robo-arm! 🦾\n\n'
+      + 'Drag the sliders in the parts panel — the arm will move. Also try:\n\n'
+      + '🔗 The "Share" button saves your arm as a link you can send to friends.\n'
+      + '🛒 The "BOM" tab shows which real parts your arm needs and roughly what they cost.\n\n'
+      + 'You\'re a robot builder now. Keep creating!',
+    ru: 'Ты собрал свою первую робо-руку! 🦾\n\n'
+      + 'Покрути слайдеры в панели с деталями — рука будет двигаться. А ещё попробуй:\n\n'
+      + '🔗 Кнопка «Ссылка» — сохранит руку и даст поделиться ею с друзьями.\n'
+      + '🛒 Вкладка «Закупка» — покажет, из каких настоящих деталей её собрать и сколько это примерно стоит.\n\n'
+      + 'Теперь ты — конструктор роботов. Твори!' },
+  tutBtnDone: { en: 'Awesome!',                       ru: 'Здорово!' },
   license:    { en: '© iBog · Licensed under CC BY-NC-ND 4.0',
                 ru: '© iBog · Лицензия CC BY-NC-ND 4.0' },
   licenseTip: { en: 'Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International',
@@ -566,7 +680,12 @@ document.documentElement.dataset.theme = theme; // до отрисовки, чт
 /* У каждого типа есть code — цифра в «цифровом коде руки» (?c= в ссылке).
    Коды НЕ переиспользовать и не менять: они застолблены за типами навсегда.
    Все 10 цифр заняты; 11-й тип потребует новой версии кода (CODE_VERSION). */
+/* Порядок ключей = порядок кнопок в тулбаре, сгруппирован по назначению:
+   движение (поворот, рельс, суставы) → структура (звено, кронштейн) →
+   наконечники в конце (сборка идёт от основания, они нужны последними).
+   Порядок НЕ влияет на коды ссылок — code застолблен за типом навсегда. */
 const TYPES = {
+  /* --- движение --- */
   yaw: {
     code: 0,
     icon: '🔄',
@@ -574,6 +693,13 @@ const TYPES = {
     color: 0x4da3ff,
     params: [{ key: 'angle', label: { en: 'Angle, °', ru: 'Угол, °' }, min: -180, max: 180, step: 1, def: 0 }],
     height: 0.5,
+  },
+  rail: {
+    code: 8,
+    icon: '🛤️',
+    label: { en: 'Rail', ru: 'Рельс' },
+    color: 0xd9c34d,
+    params: [{ key: 'pos', label: { en: 'Position', ru: 'Позиция' }, min: -2, max: 2, step: 0.05, def: 0 }],
   },
   pitch: {
     code: 1,
@@ -591,28 +717,6 @@ const TYPES = {
     params: [{ key: 'angle', label: { en: 'Angle, °', ru: 'Угол, °' }, min: -180, max: 180, step: 1, def: 0 }],
     height: 0.4,
   },
-  link: {
-    code: 3,
-    icon: '📏',
-    label: { en: 'Link', ru: 'Звено' },
-    color: 0x9aa7b8,
-    params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.3, max: 3, step: 0.05, def: 1 }],
-  },
-  gripper: {
-    code: 4,
-    icon: '🤏',
-    label: { en: 'Gripper', ru: 'Схват' },
-    color: 0x57d98a,
-    params: [{ key: 'open', label: { en: 'Opening, %', ru: 'Раскрытие, %' }, min: 0, max: 100, step: 1, def: 50 }],
-    height: 0.55,
-  },
-  prismatic: {
-    code: 5,
-    icon: '🔭',
-    label: { en: 'Prismatic', ru: 'Телескоп' },
-    color: 0x4dd9cf,
-    params: [{ key: 'ext', label: { en: 'Extension', ru: 'Выдвижение' }, min: 0, max: 1.2, step: 0.05, def: 0.4 }],
-  },
   spherical: {
     code: 6,
     icon: '🕹️',
@@ -623,6 +727,21 @@ const TYPES = {
       { key: 'yaw', label: { en: 'Yaw, °', ru: 'Поворот, °' }, min: -180, max: 180, step: 1, def: 0 },
     ],
   },
+  prismatic: {
+    code: 5,
+    icon: '🔭',
+    label: { en: 'Prismatic', ru: 'Телескоп' },
+    color: 0x4dd9cf,
+    params: [{ key: 'ext', label: { en: 'Extension', ru: 'Выдвижение' }, min: 0, max: 1.2, step: 0.05, def: 0.4 }],
+  },
+  /* --- структура --- */
+  link: {
+    code: 3,
+    icon: '📏',
+    label: { en: 'Link', ru: 'Звено' },
+    color: 0x9aa7b8,
+    params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.3, max: 3, step: 0.05, def: 1 }],
+  },
   offset: {
     code: 7,
     icon: '↪️',
@@ -630,12 +749,14 @@ const TYPES = {
     color: 0xb8a58f,
     params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.2, max: 1.5, step: 0.05, def: 0.5 }],
   },
-  rail: {
-    code: 8,
-    icon: '🛤️',
-    label: { en: 'Rail', ru: 'Рельс' },
-    color: 0xd9c34d,
-    params: [{ key: 'pos', label: { en: 'Position', ru: 'Позиция' }, min: -2, max: 2, step: 0.05, def: 0 }],
+  /* --- наконечники (концевые эффекторы) --- */
+  gripper: {
+    code: 4,
+    icon: '🤏',
+    label: { en: 'Gripper', ru: 'Схват' },
+    color: 0x57d98a,
+    params: [{ key: 'open', label: { en: 'Opening, %', ru: 'Раскрытие, %' }, min: 0, max: 100, step: 1, def: 50 }],
+    height: 0.55,
   },
   suction: {
     code: 9,
@@ -643,6 +764,20 @@ const TYPES = {
     label: { en: 'Suction cup', ru: 'Присоска' },
     color: 0x7fd94d,
     params: [{ key: 'power', label: { en: 'Suction, %', ru: 'Присос, %' }, min: 0, max: 100, step: 1, def: 0 }],
+  },
+  drill: {
+    code: 10, /* коды 10+ доступны только в версии 2 цифрового кода */
+    icon: '🔩',
+    label: { en: 'Drill', ru: 'Сверло' },
+    color: 0xff5c5c,
+    params: [{ key: 'speed', label: { en: 'Speed, %', ru: 'Обороты, %' }, min: 0, max: 100, step: 1, def: 0 }],
+  },
+  mill: {
+    code: 11,
+    icon: '⚙️',
+    label: { en: 'Mill', ru: 'Фреза' },
+    color: 0x7a86e8,
+    params: [{ key: 'speed', label: { en: 'Speed, %', ru: 'Обороты, %' }, min: 0, max: 100, step: 1, def: 0 }],
   },
 };
 
@@ -692,6 +827,16 @@ const ICONS = {
             <line x1="3.2" y1="10.5" x2="14.8" y2="10.5"/>
             <line x1="9" y1="5.8" x2="9" y2="2.5"/>
             <line x1="4" y1="14.5" x2="14" y2="14.5" stroke-dasharray="2.2 2"/>`,
+  /* сверло: корпус, бит с витками, остриё */
+  drill: `<rect x="5.5" y="2" width="7" height="5" rx="1"/>
+          <line x1="9" y1="7" x2="9" y2="12.5"/>
+          <path d="M7.4 8.8h3.2M7.4 10.6h3.2"/>
+          <path d="M9 15.6l-1.3-2.6h2.6z"/>`,
+  /* фреза: шток и шестерня с зубьями */
+  mill: `<line x1="9" y1="1.8" x2="9" y2="6.6"/>
+         <circle cx="9" cy="10.4" r="3"/>
+         <circle cx="9" cy="10.4" r="0.9"/>
+         <path d="M9 6.2v1.2M9 13.4v1.2M4.8 10.4H6M12 10.4h1.2M6 7.4l.9.9M11.1 12.5l.9.9M12 7.4l-.9.9M6.9 12.5l-.9.9"/>`,
 };
 
 function iconSVG(type, size = 16) {
@@ -1080,6 +1225,44 @@ function buildArm() {
       applySuction(c);
       parent = pivot;
       attachY = 0.38;
+
+    } else if (c.type === 'drill') {
+      /* дрель: корпус + вращающееся сверло; скорость крутит группу _spin */
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.3, 20), mat(SCN.joint)));
+      body.position.y = 0.15;
+      pivot.add(body);
+      const spin = new THREE.Group();
+      spin.position.y = 0.3;
+      const bit = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.02, 0.34, 10), mat(t.color)));
+      bit.position.y = 0.17;
+      const flute = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.02), mat(SCN.metal));
+      flute.position.y = 0.14;
+      spin.add(bit, flute);
+      pivot.add(spin);
+      c._spin = spin;
+      parent = pivot;
+      attachY = 0.66;
+
+    } else if (c.type === 'mill') {
+      /* фреза: шток + вращающаяся шестерня с зубьями */
+      const stem = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.3, 14), mat(SCN.joint)));
+      stem.position.y = 0.15;
+      pivot.add(stem);
+      const spin = new THREE.Group();
+      spin.position.y = 0.34;
+      const disk = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.07, 24), mat(t.color)));
+      spin.add(disk);
+      for (let k = 0; k < 9; k++) {
+        const tooth = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), mat(t.color)));
+        const a = k / 9 * Math.PI * 2;
+        tooth.position.set(Math.cos(a) * 0.235, 0, Math.sin(a) * 0.235);
+        tooth.rotation.y = -a;
+        spin.add(tooth);
+      }
+      pivot.add(spin);
+      c._spin = spin;
+      parent = pivot;
+      attachY = 0.42;
     }
   }
   updateJSONView();
@@ -1142,13 +1325,17 @@ function renderAddRow() {
     b.innerHTML = `${iconSVG(type, 22)}+ ${tr(ty.label)}`;
     b.style.borderColor = hex + '55';
     b.title = t('addTip', tr(ty.label));
+    b.dataset.type = type; // для подсветки шага обучения
     b.onclick = () => {
+      /* в обучении принимаем только кнопку текущего шага */
+      if (tutStep >= 0 && type !== TUTORIAL[tutStep]) { tutWrongFlash(); return; }
       const c = { type };
       for (const p of ty.params) c[p.key] = p.def;
       pushUndo();
       components.push(c);
       buildArm();
       renderPanel();
+      if (tutStep >= 0) advanceTutorial();
     };
     addRow.appendChild(b);
   }
@@ -1191,7 +1378,7 @@ function renderPanel() {
     }
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = '✕'; del.title = t('remove');
-    del.onclick = () => { pushUndo(); components.splice(i, 1); buildArm(); renderPanel(); };
+    del.onclick = () => { cancelTutorial(); pushUndo(); components.splice(i, 1); buildArm(); renderPanel(); };
     head.appendChild(del);
     card.appendChild(head);
 
@@ -1297,6 +1484,7 @@ function randi(a, b) { return Math.round(rand(a, b)); }
 function randLen(a, b) { return +rand(a, b).toFixed(2); }
 
 function generateArm() {
+  cancelTutorial();
   const c = [];
 
   /* иногда — рельс в основании */
@@ -1332,9 +1520,11 @@ function generateArm() {
 
   /* концевой эффектор — не всегда */
   if (Math.random() < 0.85) {
-    c.push(Math.random() < 0.6
-      ? { type: 'gripper', open: randi(0, 100) }
-      : { type: 'suction', power: randi(0, 100) });
+    const r = Math.random();
+    if (r < 0.5) c.push({ type: 'gripper', open: randi(0, 100) });
+    else if (r < 0.7) c.push({ type: 'suction', power: randi(0, 100) });
+    else if (r < 0.85) c.push({ type: 'drill', speed: randi(20, 100) });
+    else c.push({ type: 'mill', speed: randi(20, 100) });
   }
 
   pushUndo();
@@ -1350,6 +1540,7 @@ document.getElementById('btnGenerate').onclick = generateArm;
 
 /* очищает цепочку и возвращает стартовый вид: чистый лист */
 function newProject() {
+  cancelTutorial();
   if (components.length) pushUndo();
   components = [];
   buildArm();
@@ -1445,6 +1636,11 @@ const PARTS = {
   relay:      { ru: 'Модуль реле',                      en: 'Relay module',                price: 2 },
   mosfet:     { ru: 'MOSFET-модуль IRF520',             en: 'IRF520 MOSFET module',        price: 1.5 },
   cup:        { ru: 'Вакуумная присоска',               en: 'Suction cup',                 price: 2 },
+  /* --- шпиндель и инструмент --- */
+  spindle775: { ru: 'Мотор-шпиндель 775, 12 В',        en: '775 spindle motor, 12 V',     price: 14 },
+  er11:       { ru: 'Цанговый патрон ER11 на вал',     en: 'ER11 collet chuck',           price: 8 },
+  drillbits:  { ru: 'Свёрла 1–6 мм (набор)',           en: 'Drill bit set 1–6 mm',        price: 5 },
+  millbits:   { ru: 'Фрезы по дереву/пластику (набор)', en: 'End mill set (wood/plastic)', price: 9 },
   /* --- корпусные детали и мелочь --- */
   print:      { ru: '3D-печать: деталь (пластик)',      en: '3D-printed part',             price: 4 },
   laser:      { ru: 'Лазерная резка: фанера',           en: 'Laser-cut plywood part',      price: 3 },
@@ -1488,6 +1684,9 @@ const NEEDS = {
   rail:      { linrail: 1, nema17: 1, belt: 1, bearings: 1, tmc2209: 1, endstop: 1, print: 1 },
   gripper:   { nema14: 1, leadscrew: 1, bearings: 1, tmc2209: 1, endstop: 1, print: 1 },
   suction:   { pump: 1, valve: 1, relay: 1, cup: 1, print: 1 },
+  /* шпиндельные наконечники: DC-мотор + патрон + инструмент, управление MOSFET */
+  drill:     { spindle775: 1, er11: 1, drillbits: 1, mosfet: 1, print: 1 },
+  mill:      { spindle775: 1, er11: 1, millbits: 1, mosfet: 1, print: 1 },
 };
 
 /* выбранные замены: базовый ключ → ключ альтернативы */
@@ -1501,12 +1700,20 @@ function armName() {
   if (!components.length) return { ru: 'Пустая конфигурация', en: 'Empty configuration' };
 
   const AXES = { yaw: 1, pitch: 1, roll: 1, prismatic: 1, spherical: 2 };
-  let axes = 0, rails = 0, grippers = 0, suctions = 0;
+  /* наконечник → его название в имени руки (творительный падеж / with …) */
+  const EFFECTORS = {
+    gripper: { ru: 'захватом', en: 'gripper' },
+    suction: { ru: 'вакуумной присоской', en: 'suction cup' },
+    drill:   { ru: 'сверлом', en: 'drill' },
+    mill:    { ru: 'фрезой', en: 'milling cutter' },
+  };
+  let axes = 0, rails = 0;
+  const effRu = [], effEn = [];
   for (const c of components) {
     axes += AXES[c.type] ?? 0;
     if (c.type === 'rail') rails++;
-    if (c.type === 'gripper') grippers++;
-    if (c.type === 'suction') suctions++;
+    const eff = EFFECTORS[c.type];
+    if (eff && !effRu.includes(eff.ru)) { effRu.push(eff.ru); effEn.push(eff.en); }
   }
 
   let ru, en;
@@ -1515,10 +1722,11 @@ function armName() {
 
   if (rails) { ru += ' на линейном рельсе'; en += ' on linear rail'; }
 
-  if (grippers && suctions) { ru += ' с захватом и вакуумной присоской'; en += ' with gripper and suction cup'; }
-  else if (grippers) { ru += ' с захватом'; en += ' with gripper'; }
-  else if (suctions) { ru += ' с вакуумным схватом'; en += ' with vacuum suction cup'; }
-  else if (axes > 0) { ru += ' без концевого эффектора'; en += ' without end effector'; }
+  if (effRu.length) {
+    /* «со сверлом», но «с захватом» */
+    ru += (effRu[0][0] === 'с' ? ' со ' : ' с ') + effRu.join(' и ');
+    en += ' with ' + effEn.join(' and ');
+  } else if (axes > 0) { ru += ' без концевого эффектора'; en += ' without end effector'; }
 
   return { ru, en };
 }
@@ -1659,6 +1867,7 @@ function validateConfig(data) {
 document.getElementById('btnApply').onclick = () => {
   try {
     const data = validateConfig(JSON.parse(jsonText.value));
+    cancelTutorial();
     pushUndo();
     components = data;
     buildArm();
@@ -1706,7 +1915,10 @@ document.getElementById('btnCopy').onclick = async () => {
    цифр в максимальном idx. Разделители в коде допускаются любые нецифровые
    (группы 4227-8474-... для удобной диктовки) и отсекаются перед разбором. */
 
-const CODE_VERSION = '1';
+/* Версии формата: 1 — типы одной цифрой (коды 0–9), 2 — типы двумя цифрами
+   (00–99, для новых типов с кодами 10+). Энкодер выбирает минимально
+   достаточную версию, декодер читает обе. */
+const CODE_VERSIONS = { 1: 1, 2: 2 }; // версия → ширина кода типа в цифрах
 
 /* сколько цифр занимает параметр в коде */
 function paramDigits(p) {
@@ -1742,18 +1954,27 @@ function dammValid(digits) {
 }
 
 /* нормализация ввода: любые разделители отсекаются; затем проверка Дамма и
-   версии; возвращает «тело» кода без версии и контрольной цифры */
+   версии; возвращает {tw: ширина кода типа, body: тело без версии и
+   контрольной цифры} либо null */
 function codeBody(str) {
   const d = String(str).replace(/\D+/g, '');
-  if (d.length < 3 || d[0] !== CODE_VERSION || !dammValid(d)) return null;
-  return d.slice(1, -1);
+  if (d.length < 3 || !CODE_VERSIONS[d[0]] || !dammValid(d)) return null;
+  return { tw: CODE_VERSIONS[d[0]], body: d.slice(1, -1) };
+}
+
+/* минимально достаточная версия: 2 — только если есть типы с кодами 10+ */
+function codeVersionFor(list) {
+  return list.some(c => TYPES[c.type].code > 9) ? '2' : '1';
 }
 
 function encodeArmCode() {
-  let s = CODE_VERSION;
-  for (const c of cleanConfig()) {
+  const cfg = cleanConfig();
+  const ver = codeVersionFor(cfg);
+  const tw = CODE_VERSIONS[ver];
+  let s = ver;
+  for (const c of cfg) {
     const ty = TYPES[c.type];
-    s += String(ty.code);
+    s += String(ty.code).padStart(tw, '0');
     for (const p of ty.params) {
       const v = Math.min(p.max, Math.max(p.min, c[p.key] ?? p.def));
       s += String(Math.round((v - p.min) / p.step)).padStart(paramDigits(p), '0');
@@ -1762,11 +1983,13 @@ function encodeArmCode() {
   return s + dammDigit(s);
 }
 
-/* ---- Замороженная спецификация формата v1 (см. CODEC.md) ----
-   Диапазоны/шаги параметров — часть протокола ссылок: их изменение молча
-   ломает ВСЕ разосланные коды. Менять можно только с новой CODE_VERSION.
+/* ---- Замороженная спецификация формата кода (см. CODEC.md) ----
+   Коды типов и диапазоны/шаги параметров — часть протокола ссылок: их
+   изменение молча ломает ВСЕ разосланные коды. Новые типы добавляются в
+   конец с новыми кодами; менять существующие строки нельзя без новой версии.
    Самопроверка при старте кричит в консоль, если TYPES разошёлся со спекой. */
-const CODE_V1_SPEC = {
+const CODE_SPEC = {
+  /* v1: коды 0–9 */
   0: 'yaw|angle:-180:180:1:3',
   1: 'pitch|angle:-120:120:1:3',
   2: 'roll|angle:-180:180:1:3',
@@ -1777,6 +2000,9 @@ const CODE_V1_SPEC = {
   7: 'offset|length:0.2:1.5:0.05:2',
   8: 'rail|pos:-2:2:0.05:2',
   9: 'suction|power:0:100:1:3',
+  /* v2: коды 10+ (двухзначные) */
+  10: 'drill|speed:0:100:1:3',
+  11: 'mill|speed:0:100:1:3',
 };
 
 function checkCodeSpec() {
@@ -1784,28 +2010,31 @@ function checkCodeSpec() {
   for (const [type, ty] of Object.entries(TYPES)) {
     const actual = type + '|' + ty.params.map(p =>
       [p.key, p.min, p.max, p.step, paramDigits(p)].join(':')).join('|');
-    if (CODE_V1_SPEC[ty.code] !== actual) {
-      errors.push(`code ${ty.code}: spec "${CODE_V1_SPEC[ty.code]}" != actual "${actual}"`);
+    if (CODE_SPEC[ty.code] !== actual) {
+      errors.push(`code ${ty.code}: spec "${CODE_SPEC[ty.code]}" != actual "${actual}"`);
     }
   }
-  if (Object.keys(TYPES).length !== Object.keys(CODE_V1_SPEC).length) {
-    errors.push('количество типов разошлось со спекой v1');
+  if (Object.keys(TYPES).length !== Object.keys(CODE_SPEC).length) {
+    errors.push('количество типов разошлось со спекой кода');
   }
   for (const e of errors) {
-    console.error(`Robo-Arm CODEC v1 нарушен — старые ссылки сломаются! ${e}\n`
-      + 'Изменение min/max/step требует новой CODE_VERSION (см. CODEC.md).');
+    console.error(`Robo-Arm CODEC нарушен — старые ссылки сломаются! ${e}\n`
+      + 'Изменение кодов/min/max/step требует новой версии формата (см. CODEC.md).');
   }
   return !errors.length;
 }
 
 /* полный код (типы + параметры) → массив компонентов; null, если код битый */
 function decodeArmCode(str) {
-  const d = codeBody(str);
-  if (d === null) return null;
+  const parsed = codeBody(str);
+  if (parsed === null) return null;
+  const { tw, body: d } = parsed;
   const out = [];
   let i = 0;
   while (i < d.length) {
-    const type = CODE_TO_TYPE[d[i++]];
+    if (i + tw > d.length) return null;
+    const type = CODE_TO_TYPE[String(parseInt(d.slice(i, i + tw), 10))];
+    i += tw;
     if (!type) return null;
     const c = { type };
     for (const p of TYPES[type].params) {
@@ -1832,17 +2061,27 @@ function midParam(p) {
 }
 
 function decodeStructCode(str) {
-  const d = codeBody(str);
-  if (d === null || !d.length) return null;
+  const parsed = codeBody(str);
+  if (parsed === null || !parsed.body.length) return null;
+  const { tw, body: d } = parsed;
+  if (d.length % tw) return null;
   const out = [];
-  for (const ch of d) {
-    const type = CODE_TO_TYPE[ch];
+  for (let i = 0; i < d.length; i += tw) {
+    const type = CODE_TO_TYPE[String(parseInt(d.slice(i, i + tw), 10))];
     if (!type) return null;
     const c = { type };
     for (const p of TYPES[type].params) c[p.key] = midParam(p);
     out.push(c);
   }
   return out;
+}
+
+function encodeStructCode() {
+  const ver = codeVersionFor(components);
+  const tw = CODE_VERSIONS[ver];
+  let s = ver;
+  for (const c of components) s += String(TYPES[c.type].code).padStart(tw, '0');
+  return s + dammDigit(s);
 }
 
 /* группы по 4 цифры через дефис — легче диктовать и запоминать */
@@ -1855,17 +2094,41 @@ function groupCode(code) {
 function shareURL() {
   return `${SHARE_BASE}?c=${groupCode(encodeArmCode())}`;
 }
+function structShareURL() {
+  return `${SHARE_BASE}?s=${groupCode(encodeStructCode())}`;
+}
 
+/* Клик — полная ссылка (?c=), долгое нажатие (≥600 мс) — короткая (?s=,
+   только состав, позы по умолчанию). Обе сразу уходят в буфер обмена. */
 const btnShare = document.getElementById('btnShare');
-btnShare.onclick = async () => {
-  if (!await copyText(shareURL())) return; // ссылка сразу уходит в буфер обмена
-  btnShare.textContent = t('shareCopied');
+const LONG_PRESS_MS = 600;
+let sharePressTimer = null;
+let shareLongFired = false;
+
+async function copyShare(struct) {
+  if (!await copyText(struct ? structShareURL() : shareURL())) return;
+  btnShare.textContent = t(struct ? 'shortCopied' : 'shareCopied');
   btnShare.classList.add('done');
   setTimeout(() => {
     btnShare.textContent = t('share');
     btnShare.classList.remove('done');
   }, 2000);
+}
+
+btnShare.onclick = () => {
+  if (shareLongFired) { shareLongFired = false; return; } // клик после долгого нажатия
+  copyShare(false);
 };
+btnShare.addEventListener('pointerdown', () => {
+  shareLongFired = false;
+  clearTimeout(sharePressTimer);
+  sharePressTimer = setTimeout(() => { shareLongFired = true; copyShare(true); }, LONG_PRESS_MS);
+});
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+  btnShare.addEventListener(ev, () => clearTimeout(sharePressTimer));
+}
+/* долгое касание на мобильных не должно открывать контекстное меню */
+btnShare.addEventListener('contextmenu', e => e.preventDefault());
 
 /* ================= Отмена: откат структурных изменений руки ================= */
 
@@ -1884,6 +2147,7 @@ function pushUndo() {
 
 btnUndo.onclick = () => {
   if (!undoStack.length) return;
+  cancelTutorial();
   components = JSON.parse(undoStack.pop());
   btnUndo.hidden = !undoStack.length;
   buildArm();
@@ -1991,6 +2255,129 @@ function animateArm(now) {
   if (now - lastJsonSync > 300) { lastJsonSync = now; updateJSONView(); }
 }
 
+/* ================= Обучение: пошаговая сборка первой руки ================= */
+
+/* Сценарий: поворотный стол → звено → наклон → звено → вращение → схват */
+const TUTORIAL = ['yaw', 'link', 'pitch', 'link', 'roll', 'gripper'];
+const TUT_FLAVOR = [
+  { en: 'Let\'s start with the base! The turntable spins the whole arm left and right.',
+    ru: 'Начнём с основания! Поворотный стол крутит всю руку влево-вправо.' },
+  { en: 'Now a link — the "bone" of the arm: it makes the arm longer.',
+    ru: 'Теперь звено — «кость» руки: оно делает её длиннее.' },
+  { en: 'Add a pitch joint — the "elbow" that bends the arm.',
+    ru: 'Добавим наклон — это сустав-«локоть», он сгибает руку.' },
+  { en: 'One more link so the arm can reach farther.',
+    ru: 'Ещё одно звено, чтобы рука дотягивалась дальше.' },
+  { en: 'A roll joint — the "wrist": it spins the tool around its axis.',
+    ru: 'Вращение — «запястье»: оно крутит инструмент вокруг своей оси.' },
+  { en: 'And finally the gripper — the "fingers" that grab things!',
+    ru: 'И последнее — схват! Это «пальцы», которыми рука хватает предметы.' },
+];
+
+let tutStep = -1; // -1 — обучение неактивно
+const tutHint = document.getElementById('tutHint');
+const tutModal = document.getElementById('tutModal');
+const btnHelp = document.getElementById('btnHelp');
+
+function hideTutModal() { tutModal.hidden = true; }
+
+/* Диалоги: ask — два вопроса, about — «что это такое», done — поздравление */
+function showTutModal(mode) {
+  const title = document.getElementById('tutTitle');
+  const text = document.getElementById('tutText');
+  const actions = document.getElementById('tutActions');
+  actions.innerHTML = '';
+  const mk = (label, cb, primary) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (primary) b.className = 'primary';
+    b.onclick = cb;
+    actions.appendChild(b);
+  };
+  if (mode === 'ask') {
+    title.textContent = t('tutAskTitle');
+    text.textContent = t('tutAskText');
+    mk(t('tutBtnGuide'), startTutorial, true);
+    mk(t('tutBtnWhat'), () => showTutModal('about'));
+    mk(t('tutBtnLater'), hideTutModal);
+  } else if (mode === 'about') {
+    title.textContent = t('tutAboutTitle');
+    text.textContent = t('tutAboutText');
+    mk(t('tutBtnTry'), startTutorial, true);
+    mk(t('tutBtnOk'), hideTutModal);
+  } else { // done
+    title.textContent = t('tutDoneTitle');
+    text.textContent = t('tutDoneText');
+    mk(t('tutBtnDone'), hideTutModal, true);
+  }
+  tutModal.hidden = false;
+}
+
+btnHelp.onclick = () => showTutModal('ask');
+tutModal.onclick = e => { if (e.target === tutModal) hideTutModal(); };
+
+function clearTutHighlight() {
+  for (const b of addRow.querySelectorAll('.tut-target')) b.classList.remove('tut-target');
+}
+
+/* Показ текущего шага: подсветка кнопки-цели + подсказка-попап */
+function showTutStep(msgOverride) {
+  clearTutHighlight();
+  const type = TUTORIAL[tutStep];
+  const btn = addRow.querySelector(`button[data-type="${type}"]`);
+  if (btn) {
+    btn.classList.add('tut-target');
+    btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }
+  const name = tr(TYPES[type].label);
+  tutHint.innerHTML = `<span class="tut-exit" title="${t('tutExitTip')}">✕</span>`
+    + `<span class="tut-step">${t('tutStepTitle', tutStep + 1, TUTORIAL.length)}</span><div></div>`;
+  tutHint.lastChild.textContent = msgOverride ?? `${tr(TUT_FLAVOR[tutStep])} ${t('tutPress', name)}`;
+  tutHint.querySelector('.tut-exit').onclick = cancelTutorial;
+  tutHint.hidden = false;
+}
+
+function startTutorial() {
+  hideTutModal();
+  document.body.classList.remove('expanded'); // панель кнопок должна быть видна
+  btnExpand.classList.remove('on');
+  if (components.length) pushUndo();
+  components = [];
+  buildArm();
+  renderPanel();
+  camera.position.copy(CAM_HOME.pos);
+  controls.target.copy(CAM_HOME.target);
+  startHint.hidden = true; // ведём своей подсказкой, стартовая не нужна
+  tutStep = 0;
+  showTutStep();
+}
+
+function advanceTutorial() {
+  tutStep++;
+  if (tutStep >= TUTORIAL.length) {
+    cancelTutorial();
+    showTutModal('done');
+    return;
+  }
+  showTutStep();
+}
+
+/* нажата не та кнопка: мягкое напоминание, компонент не добавляем */
+let tutFlashTimer = null;
+function tutWrongFlash() {
+  showTutStep(t('tutWrong', tr(TYPES[TUTORIAL[tutStep]].label)));
+  clearTimeout(tutFlashTimer);
+  tutFlashTimer = setTimeout(() => { if (tutStep >= 0) showTutStep(); }, 1800);
+}
+
+/* выход из обучения (крестик, генерация, Apply, отмена, удаление, новый проект) */
+function cancelTutorial() {
+  if (tutStep < 0) return;
+  tutStep = -1;
+  clearTutHighlight();
+  tutHint.hidden = true;
+}
+
 /* ================= Применение темы ================= */
 
 /* Обновляет сцену и состояние переключателя; рука перекрашивается пересборкой */
@@ -2062,6 +2449,8 @@ function applyI18n() {
   const licLink = document.getElementById('licenseLink');
   licLink.textContent = t('license');
   licLink.title = t('licenseTip');
+  document.getElementById('btnHelp').title = t('helpTip');
+  if (tutStep >= 0) showTutStep(); // renderAddRow пересоздал кнопки — вернуть подсветку
   document.getElementById('bomTitle').textContent = t('bomTitle');
   document.getElementById('bomNote').textContent = t('bomNote');
   startHint.textContent = t(startHint.classList.contains('warn') ? 'badLink' : 'startHint');
@@ -2099,6 +2488,10 @@ else if (badLink) showBadLink(); // код был, но битый: пустая
 
 renderer.setAnimationLoop((now) => {
   if (chkAnimate.checked) animateArm(now);
+  /* шпиндели сверла/фрезы крутятся всегда, пропорционально оборотам */
+  for (const c of components) {
+    if (c._spin) c._spin.rotation.y += (c.speed ?? 0) * 0.004;
+  }
   controls.update();
   if (chkFit.checked) cameraAutoExpand();
   updateFog();
