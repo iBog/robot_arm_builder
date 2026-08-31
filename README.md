@@ -38,6 +38,9 @@ but needs a linear rail and one more motor.
   (toggled per component with the *zone* checkbox).
 - **JSON configuration** — the arm structure serialises into editable JSON: copy configurations
   you like, paste them back and press Apply.
+- **URDF export** — the same arm as a standard ROS robot description: a self-contained `.urdf`
+  file with joints, limits, primitive geometry and estimated masses, ready for RViz, MoveIt,
+  Gazebo or PyBullet. Copy it or download it from the URDF tab.
 - **🎲 Generate Arm** — a random generator that follows the logic of real manipulators.
 - **✨ Start New Project** — clears the arm and returns the camera to its starting view, then
   points a hint at the toolbar so you know where to add the first component.
@@ -95,6 +98,28 @@ Components are added in order from the base towards the tip of the arm.
 The JSON tab always mirrors the current arm. Edit it by hand and press **Apply**: unknown component
 types are rejected, values are clamped to their allowed range, and missing parameters fall back to
 their defaults.
+
+## URDF export
+
+The **URDF** tab mirrors the current arm as a [URDF](http://wiki.ros.org/urdf) robot description —
+the format ROS, RViz, MoveIt, Gazebo and PyBullet speak. The file is self-contained: geometry is
+built from primitives (cylinders, boxes, spheres), so there are no external meshes to ship with it.
+
+- **Frames.** In the 3D view the arm grows along local +Y; URDF uses +Z, so the export rotates the
+  frame by Rx(+90°). Yaw and roll turn around `0 0 1`, pitch around `1 0 0`.
+- **Units.** One builder unit = 1 m, angles in radians (the `URDF_SCALE` constant scales the whole
+  model if your arm is smaller).
+- **Joints.** Every movable component becomes a joint with the same limits as its slider: revolute
+  for yaw/pitch/roll, prismatic for the telescope, the rail and the gripper fingers (the right
+  finger `mimic`s the left), continuous for the drill and mill spindles. A ball joint has no URDF
+  counterpart, so it is exported as two revolute joints sharing an intermediate link. Links and
+  offsets are structure, not motion — they shape the link they belong to. The tip carries the
+  usual `tool0` frame.
+- **Estimates.** Masses, inertia tensors and joint `effort`/`velocity` are computed from primitive
+  volumes at a uniform density: enough for visualisation and kinematics, but replace them with real
+  numbers from the parts in the BOM before doing dynamics.
+- **Pose.** URDF describes a model, not a pose, so the current slider values are listed in the
+  header comment — copy them into a `joint_states` message if you need this exact posture.
 
 ## About the shopping list
 

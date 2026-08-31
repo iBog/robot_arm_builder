@@ -356,24 +356,24 @@
   #licenseBar a { color: var(--muted); text-decoration: none; }
   #licenseBar a:hover { color: var(--accent); text-decoration: underline; }
 
-  /* ---- JSON под 3D-окном ---- */
-  #jsonarea { background: var(--panel); }
-  #jsonbar {
+  /* ---- JSON и URDF под 3D-окном ---- */
+  #jsonarea, #urdfarea { background: var(--panel); }
+  #jsonbar, #urdfbar {
     display: flex; align-items: center; gap: 8px;
     padding: 6px 12px; border-bottom: 1px solid var(--border);
   }
-  #jsonbar .title { font-weight: 600; font-size: 13px; flex: 1; }
-  #jsonbar button {
+  #jsonbar .title, #urdfbar .title { font-weight: 600; font-size: 13px; flex: 1; }
+  #jsonbar button, #urdfbar button {
     background: var(--panel2); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 4px 12px; cursor: pointer; font-size: 13px;
   }
-  #jsonbar button:hover { border-color: var(--accent); color: var(--accent); }
-  #jsonbar { flex-wrap: wrap; }
-  #jsonStatus { font-size: 12px; color: var(--muted); min-width: 0; text-align: right; }
-  #jsonStatus.ok { color: var(--ok); }
-  #jsonStatus.err { color: var(--danger); }
-  #jsonText {
+  #jsonbar button:hover, #urdfbar button:hover { border-color: var(--accent); color: var(--accent); }
+  #jsonbar, #urdfbar { flex-wrap: wrap; }
+  #jsonStatus, #urdfStatus { font-size: 12px; color: var(--muted); min-width: 0; text-align: right; }
+  #jsonStatus.ok, #urdfStatus.ok { color: var(--ok); }
+  #jsonStatus.err, #urdfStatus.err { color: var(--danger); }
+  #jsonText, #urdfText {
     flex: 1; resize: none; border: none; outline: none;
     background: var(--bg); color: var(--code);
     font: 12px/1.5 Consolas, "Courier New", monospace;
@@ -415,7 +415,7 @@
     /* свёрнутая панель на мобильном: колонка одна, снизу только кнопки */
     body.panelCollapsed { grid-template-columns: minmax(0, 1fr); }
     body.panelCollapsed #genRow { margin-bottom: 8px; }
-    #jsonText { min-height: 120px; }
+    #jsonText, #urdfText { min-height: 120px; }
   }
 
   /* ---- Развёрнутый 3D-вид: видны только шапка и вьюпорт ---- */
@@ -476,6 +476,7 @@
   <div id="tabs">
     <button data-tab="components" class="active"></button>
     <button data-tab="jsonarea"></button>
+    <button data-tab="urdfarea"></button>
     <button data-tab="bom"></button>
   </div>
   <div id="components" class="tabpane active"></div>
@@ -487,6 +488,15 @@
       <button id="btnCopy"></button>
     </div>
     <textarea id="jsonText" spellcheck="false"></textarea>
+  </div>
+  <div id="urdfarea" class="tabpane">
+    <div id="urdfbar">
+      <span class="title" id="urdfTitle"></span>
+      <span id="urdfStatus"></span>
+      <button id="btnUrdfCopy"></button>
+      <button id="btnUrdfSave"></button>
+    </div>
+    <textarea id="urdfText" spellcheck="false" readonly></textarea>
   </div>
   <div id="bom" class="tabpane">
     <h2 id="bomTitle"></h2>
@@ -523,7 +533,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* Версия проекта — инкрементируется при каждом заметном изменении */
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 
 /* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
    на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
@@ -551,6 +561,7 @@ const STR = {
                 ru: '⚠️ Код в ссылке повреждён или неверный — рука не загружена. Проверьте ссылку или соберите свою руку кнопками выше.' },
   tabParts:   { en: 'Parts',                          ru: 'Состав' },
   tabJson:    { en: 'JSON',                           ru: 'JSON' },
+  tabUrdf:    { en: 'URDF',                           ru: 'URDF' },
   tabBom:     { en: '🛒 BOM',                         ru: '🛒 Закупка' },
   addTip:     { en: name => `Add: ${name}`,           ru: name => `Добавить: ${name}` },
   empty:      { en: 'Arm is empty.',                  ru: 'Рука пуста.' },
@@ -563,6 +574,9 @@ const STR = {
                 ru: 'Зона движения — вкл/выкл пунктирную область' },
   remove:     { en: 'Remove component',               ru: 'Удалить компонент' },
   jsonTitle:  { en: 'JSON configuration',             ru: 'Конфигурация JSON' },
+  urdfTitle:  { en: 'URDF description',               ru: 'Описание URDF' },
+  save:       { en: 'Download',                       ru: 'Скачать' },
+  saved:      { en: '✓ file saved',                   ru: '✓ файл сохранён' },
   apply:      { en: 'Apply',                          ru: 'Применить' },
   copy:       { en: 'Copy',                           ru: 'Копировать' },
   applied:    { en: '✓ applied',                      ru: '✓ применено' },
@@ -1281,6 +1295,7 @@ function buildArm() {
     }
   }
   updateJSONView();
+  updateURDFView();
   updateBOM();
   if (components.length) startHint.hidden = true; // рука уже не пуста
 }
@@ -1325,6 +1340,7 @@ function applyParam3D(c) {
 function applyParam(c) {
   if (!applyParam3D(c)) { buildArm(); return; }
   updateJSONView();
+  updateURDFView(); // в URDF от позы зависит только комментарий-шапка
 }
 
 /* ================= UI: панель компонентов ================= */
@@ -1576,6 +1592,7 @@ for (const btn of document.querySelectorAll('#tabs button')) {
       pane.classList.toggle('active', pane.id === btn.dataset.tab);
     }
     if (btn.dataset.tab === 'jsonarea') updateJSONView();
+    if (btn.dataset.tab === 'urdfarea') updateURDFView();
   };
 }
 
@@ -1859,11 +1876,13 @@ function updateJSONView() {
   jsonText.value = JSON.stringify(cleanConfig(), null, 2);
 }
 
-function setStatus(text, cls) {
-  jsonStatus.textContent = text;
-  jsonStatus.className = cls || '';
-  if (text) setTimeout(() => { if (jsonStatus.textContent === text) { jsonStatus.textContent = ''; jsonStatus.className = ''; } }, 3000);
+function flashStatus(el, text, cls) {
+  el.textContent = text;
+  el.className = cls || '';
+  if (text) setTimeout(() => { if (el.textContent === text) { el.textContent = ''; el.className = ''; } }, 3000);
 }
+
+function setStatus(text, cls) { flashStatus(jsonStatus, text, cls); }
 
 /* Валидация конфигурации (Apply и ?config= из URL): неизвестный тип — ошибка,
    значения зажимаются в min/max, пропущенные параметры добираются из def */
@@ -2146,6 +2165,331 @@ for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
 /* долгое касание на мобильных не должно открывать контекстное меню */
 btnShare.addEventListener('contextmenu', e => e.preventDefault());
 
+/* ================= URDF: описание руки для ROS ================= */
+
+/* URDF (Unified Robot Description Format) — стандартное XML-описание робота:
+   дерево звеньев (link), соединённых суставами (joint). Выгрузка полностью
+   самодостаточна: геометрия — примитивы (cylinder/box/sphere), внешних мешей
+   нет, файл открывается в RViz, MoveIt, Gazebo, PyBullet, urdf-loaders.
+
+   Оси. В сцене three.js «вдоль руки» — локальный +Y, в URDF — +Z. Экспорт
+   разворачивает систему на Rx(+90°): (x, y, z)_three → (x, −z, y)_urdf.
+   Развороты вокруг X от этого не меняются, поэтому оси суставов простые:
+   yaw/roll (three .rotation.y) → «0 0 1», pitch (.rotation.x) → «1 0 0»,
+   знак угла тот же. Цилиндр в three лежит вдоль Y, в URDF — вдоль Z: после
+   разворота осей это одна и та же ось, дополнительный rpy нужен только оси
+   сустава pitch (она лежит поперёк, rpy «0 π/2 0»).
+
+   Единицы: 1 единица сцены = URDF_SCALE метров, углы — радианы.
+   Массы, тензоры инерции и effort/velocity — оценочные (равномерная плотность
+   URDF_DENSITY по объёму примитивов): для визуализации и кинематики этого
+   достаточно, для динамики их нужно заменить настоящими (см. вкладку BOM).
+
+   URDF описывает модель, а не позу, поэтому текущие значения слайдеров уходят
+   в комментарий-шапку — оттуда их можно перенести в joint_states. */
+
+const URDF_SCALE = 1;          // метров в одной единице сцены
+const URDF_DENSITY = 400;      // кг/м³, «полая» конструкция — оценка массы
+const URDF_NEUTRAL = 0x8a94a6; // корпусные детали (не зависят от темы UI)
+const URDF_MARK = 0xe2e8f0;    // метки-риски на поворотных узлах
+
+const urdfPane = document.getElementById('urdfarea');
+const urdfText = document.getElementById('urdfText');
+const urdfStatus = document.getElementById('urdfStatus');
+
+/* ---- Примитивы: те же формы, что в buildArm(), но уже в осях URDF ---- */
+const uCyl = (r, l, p, col, rpy) => ({ g: 'cylinder', r, l, p, col, rpy });
+const uBox = (s, p, col, rpy) => ({ g: 'box', s, p, col, rpy });
+const uSph = (r, p, col) => ({ g: 'sphere', r, p, col });
+const uAdd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+
+const uNum = v => (Math.abs(v) < 1e-9 ? '0' : String(+v.toFixed(5)));
+const uLen = v => uNum(v * URDF_SCALE);
+const uXYZ = p => p.map(uLen).join(' ');
+const uRPY = r => (r ? r.map(uNum).join(' ') : '0 0 0');
+const uRad = deg => deg * Math.PI / 180;
+
+function uGeom(s) {
+  if (s.g === 'cylinder') return `<cylinder radius="${uLen(s.r)}" length="${uLen(s.l)}"/>`;
+  if (s.g === 'box') return `<box size="${s.s.map(uLen).join(' ')}"/>`;
+  return `<sphere radius="${uLen(s.r)}"/>`;
+}
+
+const uMatName = col => 'c_' + col.toString(16).padStart(6, '0');
+
+function uShape(s) {
+  const org = `<origin xyz="${uXYZ(s.p)}" rpy="${uRPY(s.rpy)}"/>`;
+  return `    <visual>\n      ${org}\n      <geometry>${uGeom(s)}</geometry>\n`
+       + `      <material name="${uMatName(s.col)}"/>\n    </visual>\n`
+       + `    <collision>\n      ${org}\n      <geometry>${uGeom(s)}</geometry>\n    </collision>`;
+}
+
+/* ---- Оценка масс-инерционных свойств звена по его примитивам ---- */
+
+function uMass(s) {
+  const S = URDF_SCALE;
+  const vol = s.g === 'cylinder' ? Math.PI * (s.r * S) ** 2 * (s.l * S)
+    : s.g === 'box' ? (s.s[0] * S) * (s.s[1] * S) * (s.s[2] * S)
+      : 4 / 3 * Math.PI * (s.r * S) ** 3;
+  return vol * URDF_DENSITY;
+}
+
+/* Диагональ собственного тензора в осях звена. Из разворотов в модели важен
+   только цилиндр, положенный вдоль X (корпус сустава pitch); повороты вокруг Z
+   у зубьев фрезы на диагональ влияют пренебрежимо. */
+function uInertiaDiag(s, m) {
+  const S = URDF_SCALE;
+  if (s.g === 'box') {
+    const [x, y, z] = s.s.map(v => v * S);
+    return [m * (y * y + z * z) / 12, m * (x * x + z * z) / 12, m * (x * x + y * y) / 12];
+  }
+  if (s.g === 'sphere') { const i = 0.4 * m * (s.r * S) ** 2; return [i, i, i]; }
+  const across = m * (3 * (s.r * S) ** 2 + (s.l * S) ** 2) / 12;
+  const along = 0.5 * m * (s.r * S) ** 2;
+  const alongX = s.rpy && Math.abs(Math.abs(s.rpy[1]) - Math.PI / 2) < 1e-6;
+  return alongX ? [along, across, across] : [across, across, along];
+}
+
+/* Суммарные масса, центр масс и тензор (диагональ, теорема Гюйгенса–Штейнера).
+   Пустое звено (промежуточное у шарового сустава, tool0) получает символическую
+   массу — многие парсеры спотыкаются о звенья вообще без inertial. */
+function uInertial(shapes) {
+  if (!shapes.length) {
+    return '    <inertial>\n      <mass value="0.001"/>\n'
+         + '      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>\n    </inertial>\n';
+  }
+  let m = 0;
+  let c = [0, 0, 0];
+  for (const s of shapes) {
+    const mi = uMass(s);
+    m += mi;
+    for (let k = 0; k < 3; k++) c[k] += mi * s.p[k] * URDF_SCALE;
+  }
+  c = c.map(v => v / m);
+  let ixx = 0, iyy = 0, izz = 0;
+  for (const s of shapes) {
+    const mi = uMass(s);
+    const [a, b, d] = uInertiaDiag(s, mi);
+    const [dx, dy, dz] = [0, 1, 2].map(k => s.p[k] * URDF_SCALE - c[k]);
+    ixx += a + mi * (dy * dy + dz * dz);
+    iyy += b + mi * (dx * dx + dz * dz);
+    izz += d + mi * (dx * dx + dy * dy);
+  }
+  return `    <inertial>\n      <origin xyz="${c.map(uNum).join(' ')}" rpy="0 0 0"/>\n`
+       + `      <mass value="${uNum(m)}"/>\n`
+       + `      <inertia ixx="${uNum(ixx)}" ixy="0" ixz="0" iyy="${uNum(iyy)}" iyz="0" izz="${uNum(izz)}"/>\n`
+       + '    </inertial>\n';
+}
+
+/* ---- Имя робота и файла: латиница из английского названия руки ---- */
+function urdfName() {
+  return armName().en.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'robo_arm';
+}
+
+/* ---- Сборка URDF из цепочки components ---- */
+function buildURDF() {
+  const nodes = [];  // звенья и суставы в порядке цепочки
+  const pose = [];   // текущие значения суставов — в комментарий-шапку
+  let cur = { name: 'base_link', shapes: [] };
+  nodes.push({ link: cur });
+  cur.shapes.push(uCyl(0.625, 0.25, [0, 0, 0.125], URDF_NEUTRAL));
+  let org = [0, 0, 0.25]; // точка крепления следующего компонента в осях cur
+
+  /* Сустав + звено-потомок; дальше собираем в это новое звено */
+  function joint(name, type, child, at, axis, lower, upper, effort, vel, mimic) {
+    const x = [`  <joint name="${name}" type="${type}">`,
+      `    <parent link="${cur.name}"/>`,
+      `    <child link="${child}"/>`,
+      `    <origin xyz="${uXYZ(at)}" rpy="0 0 0"/>`];
+    if (axis) x.push(`    <axis xyz="${axis.join(' ')}"/>`);
+    if (type === 'revolute' || type === 'prismatic') {
+      x.push(`    <limit lower="${uNum(lower)}" upper="${uNum(upper)}" effort="${effort}" velocity="${vel}"/>`);
+    } else if (type === 'continuous') {
+      x.push(`    <limit effort="${effort}" velocity="${vel}"/>`);
+    }
+    if (mimic) x.push(`    <mimic joint="${mimic}" multiplier="1" offset="0"/>`);
+    x.push('  </joint>');
+    nodes.push({ xml: x.join('\n') });
+    cur = { name: child, shapes: [] };
+    nodes.push({ link: cur });
+    return cur;
+  }
+
+  components.forEach((c, i) => {
+    const ty = TYPES[c.type];
+    const k = i + 1;
+    const jn = `joint_${k}_${c.type}`, ln = `link_${k}_${c.type}`;
+
+    if (c.type === 'yaw' || c.type === 'roll') {
+      const h = ty.height, p = ty.params[0];
+      const L = joint(jn, 'revolute', ln, org, [0, 0, 1], uRad(p.min), uRad(p.max), 10, 2);
+      pose.push([jn, uRad(c.angle ?? 0)]);
+      if (c.type === 'yaw') {
+        L.shapes.push(uCyl(0.37, h, [0, 0, h / 2], ty.color));
+        L.shapes.push(uBox([0.06, 0.42, h * 0.7], [0, -0.2, h / 2], URDF_MARK));
+      } else {
+        L.shapes.push(uCyl(0.26, h, [0, 0, h / 2], ty.color));
+        L.shapes.push(uBox([0.05, 0.3, h * 0.8], [0, -0.16, h / 2], URDF_MARK));
+      }
+      org = [0, 0, h];
+
+    } else if (c.type === 'pitch') {
+      /* корпус-ось и крышки не вращаются — остаются на звене-родителе */
+      const h = ty.height, p = ty.params[0], axleRPY = [0, Math.PI / 2, 0];
+      cur.shapes.push(uCyl(0.26, 0.62, uAdd(org, [0, 0, h / 2]), ty.color, axleRPY));
+      cur.shapes.push(uCyl(0.29, 0.07, uAdd(org, [0.33, 0, h / 2]), URDF_NEUTRAL, axleRPY));
+      cur.shapes.push(uCyl(0.29, 0.07, uAdd(org, [-0.33, 0, h / 2]), URDF_NEUTRAL, axleRPY));
+      joint(jn, 'revolute', ln, uAdd(org, [0, 0, h / 2]), [1, 0, 0], uRad(p.min), uRad(p.max), 10, 2);
+      pose.push([jn, uRad(c.angle ?? 0)]);
+      org = [0, 0, h / 2];
+
+    } else if (c.type === 'link') {
+      /* звено — статика: отдельный сустав не нужен, форма идёт в текущее звено */
+      const len = c.length ?? 1;
+      cur.shapes.push(uCyl(0.175, len, uAdd(org, [0, 0, len / 2]), ty.color));
+      org = uAdd(org, [0, 0, len]);
+
+    } else if (c.type === 'offset') {
+      const len = c.length ?? 0.5;
+      cur.shapes.push(uBox([0.24, 0.24, 0.24], uAdd(org, [0, 0, 0.12]), ty.color));
+      cur.shapes.push(uBox([0.2, len + 0.1, 0.16], uAdd(org, [0, -len / 2, 0.2]), ty.color));
+      org = uAdd(org, [0, -len, 0.28]);
+
+    } else if (c.type === 'prismatic') {
+      const p = ty.params[0];
+      cur.shapes.push(uCyl(0.235, 0.7, uAdd(org, [0, 0, 0.35]), ty.color));
+      const L = joint(jn, 'prismatic', ln, org, [0, 0, 1],
+        p.min * URDF_SCALE, p.max * URDF_SCALE, 100, 0.5);
+      pose.push([jn, (c.ext ?? p.def) * URDF_SCALE]);
+      L.shapes.push(uCyl(0.13, 0.8, [0, 0, 0.4], URDF_NEUTRAL));
+      org = [0, 0, 0.8];
+
+    } else if (c.type === 'spherical') {
+      /* шарового сустава в URDF нет: два revolute + промежуточное звено */
+      const [pPitch, pYaw] = ty.params;
+      cur.shapes.push(uCyl(0.32, 0.2, uAdd(org, [0, 0, 0.1]), URDF_NEUTRAL));
+      cur.shapes.push(uSph(0.26, uAdd(org, [0, 0, 0.32]), ty.color));
+      joint(`joint_${k}_ball_yaw`, 'revolute', `link_${k}_ball_yaw`,
+        uAdd(org, [0, 0, 0.32]), [0, 0, 1], uRad(pYaw.min), uRad(pYaw.max), 10, 2);
+      pose.push([`joint_${k}_ball_yaw`, uRad(c.yaw ?? 0)]);
+      const L = joint(`joint_${k}_ball_pitch`, `revolute`, `link_${k}_ball`,
+        [0, 0, 0], [1, 0, 0], uRad(pPitch.min), uRad(pPitch.max), 10, 2);
+      pose.push([`joint_${k}_ball_pitch`, uRad(c.pitch ?? 0)]);
+      L.shapes.push(uCyl(0.09, 0.3, [0, 0, 0.15], URDF_NEUTRAL));
+      org = [0, 0, 0.3];
+
+    } else if (c.type === 'rail') {
+      const p = ty.params[0];
+      cur.shapes.push(uBox([4.6, 0.5, 0.12], uAdd(org, [0, 0, 0.06]), URDF_NEUTRAL));
+      const L = joint(jn, 'prismatic', ln, org, [1, 0, 0],
+        p.min * URDF_SCALE, p.max * URDF_SCALE, 200, 0.5);
+      pose.push([jn, (c.pos ?? 0) * URDF_SCALE]);
+      L.shapes.push(uBox([0.7, 0.58, 0.18], [0, 0, 0.21], ty.color));
+      org = [0, 0, 0.3];
+
+    } else if (c.type === 'gripper') {
+      /* пальцы — две призматические оси; правая повторяет левую через mimic */
+      const base = cur, at = org, gMin = 0.05, gMax = 0.23;
+      const gap = 0.05 + (c.open ?? 50) / 100 * 0.18;
+      cur.shapes.push(uBox([0.5, 0.3, 0.16], uAdd(org, [0, 0, 0.08]), URDF_NEUTRAL));
+      const lj = `joint_${k}_finger_left`;
+      joint(lj, 'prismatic', `link_${k}_finger_left`, at, [1, 0, 0],
+        gMin * URDF_SCALE, gMax * URDF_SCALE, 20, 0.05)
+        .shapes.push(uBox([0.09, 0.16, 0.42], [0, 0, 0.37], ty.color));
+      pose.push([lj, gap * URDF_SCALE]);
+      cur = base;
+      const rj = `joint_${k}_finger_right`;
+      joint(rj, 'prismatic', `link_${k}_finger_right`, at, [-1, 0, 0],
+        gMin * URDF_SCALE, gMax * URDF_SCALE, 20, 0.05, lj)
+        .shapes.push(uBox([0.09, 0.16, 0.42], [0, 0, 0.37], ty.color));
+      pose.push([rj, gap * URDF_SCALE]);
+      cur = base;
+      org = uAdd(at, [0, 0, ty.height]);
+
+    } else if (c.type === 'suction') {
+      cur.shapes.push(uCyl(0.155, 0.16, uAdd(org, [0, 0, 0.08]), URDF_NEUTRAL));
+      /* конуса в URDF нет — манжета приближена цилиндром (без учёта присоса) */
+      cur.shapes.push(uCyl(0.24, 0.2, uAdd(org, [0, 0, 0.26]), ty.color));
+      org = uAdd(org, [0, 0, 0.38]);
+
+    } else if (c.type === 'drill' || c.type === 'mill') {
+      /* шпиндель крутится без ограничений — continuous */
+      const base = cur, drill = c.type === 'drill';
+      const at = uAdd(org, [0, 0, drill ? 0.3 : 0.34]);
+      const sj = `joint_${k}_spindle`;
+      cur.shapes.push(uCyl(drill ? 0.175 : 0.08, 0.3, uAdd(org, [0, 0, 0.15]), URDF_NEUTRAL));
+      const L = joint(sj, 'continuous', `link_${k}_${drill ? 'bit' : 'cutter'}`,
+        at, [0, 0, 1], null, null, 3, 30);
+      pose.push([sj, 0]);
+      if (drill) {
+        L.shapes.push(uCyl(0.028, 0.34, [0, 0, 0.17], ty.color));
+        L.shapes.push(uBox([0.09, 0.02, 0.22], [0, 0, 0.14], URDF_NEUTRAL));
+      } else {
+        L.shapes.push(uCyl(0.2, 0.07, [0, 0, 0], ty.color));
+        for (let q = 0; q < 9; q++) {
+          const a = q / 9 * Math.PI * 2;
+          L.shapes.push(uBox([0.07, 0.07, 0.07],
+            [Math.cos(a) * 0.235, -Math.sin(a) * 0.235, 0], ty.color, [0, 0, -a]));
+        }
+      }
+      cur = base;
+      org = uAdd(org, [0, 0, drill ? 0.66 : 0.42]);
+    }
+  });
+
+  /* Рабочая точка на конце руки — общепринятый tool0 из ROS-Industrial */
+  joint('joint_tool0', 'fixed', 'tool0', org, null);
+
+  const links = nodes.filter(n => n.link).map(n => n.link);
+  const materials = [...new Set(links.flatMap(L => L.shapes.map(s => s.col)))].map(col => {
+    const rgb = [16, 8, 0].map(sh => (((col >> sh) & 255) / 255).toFixed(3));
+    return `  <material name="${uMatName(col)}">\n    <color rgba="${rgb.join(' ')} 1"/>\n  </material>`;
+  }).join('\n');
+
+  const body = nodes.map(n => n.xml ?? (
+    `  <link name="${n.link.name}">\n${uInertial(n.link.shapes)}`
+    + (n.link.shapes.length ? n.link.shapes.map(uShape).join('\n') + '\n' : '')
+    + '  </link>'
+  )).join('\n');
+
+  const head = [
+    `  Generated by Robo-Arm Builder v${VERSION} — ${armName().en}`,
+    `  Source configuration: ${shareURL()}`,
+    '',
+    `  Units: meters, radians (1 builder unit = ${URDF_SCALE} m); Z points along the arm.`,
+    `  Masses, inertias and joint effort/velocity are estimates (uniform density`,
+    `  ${URDF_DENSITY} kg/m^3) — replace them with real values from the datasheets`,
+    '  of the parts you actually buy (see the BOM tab).',
+    '',
+    '  Current pose (joint positions, rad / m):',
+    ...(pose.length ? pose.map(([nm, v]) => `    ${nm} = ${uNum(v)}`) : ['    (no movable joints)']),
+  ].join('\n');
+
+  return `<?xml version="1.0"?>\n<!--\n${head}\n-->\n<robot name="${urdfName()}">\n`
+       + (materials ? materials + '\n' : '') + body + '\n</robot>\n';
+}
+
+/* Невидимую вкладку не пересобираем — при переключении на неё вызов повторится */
+function updateURDFView() {
+  if (!urdfPane.classList.contains('active')) return;
+  urdfText.value = buildURDF();
+}
+
+document.getElementById('btnUrdfCopy').onclick = async () => {
+  if (await copyText(buildURDF())) flashStatus(urdfStatus, t('copied'), 'ok');
+};
+
+/* Сохранение файла: blob-ссылка работает и с file://; если браузер запретил —
+   остаётся кнопка «Копировать» */
+document.getElementById('btnUrdfSave').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buildURDF()], { type: 'application/xml' }));
+  a.download = urdfName() + '.urdf';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  flashStatus(urdfStatus, t('saved'), 'ok');
+};
+
 /* ================= Отмена: откат структурных изменений руки ================= */
 
 /* Снимки cleanConfig() перед каждым изменением состава (добавление, удаление,
@@ -2252,6 +2596,7 @@ chkAnimate.onchange = () => {
       applyParam3D(c);
     }
     updateJSONView(); // зафиксировать финальные значения
+    updateURDFView();
   }
 };
 
@@ -2443,7 +2788,7 @@ for (const b of document.querySelectorAll('#themeSw button')) {
 
 /* ================= Применение языка ================= */
 
-const TAB_STR = { components: 'tabParts', jsonarea: 'tabJson', bom: 'tabBom' };
+const TAB_STR = { components: 'tabParts', jsonarea: 'tabJson', urdfarea: 'tabUrdf', bom: 'tabBom' };
 
 /* Статические подписи + перерисовка кнопок добавления */
 function applyI18n() {
@@ -2464,6 +2809,9 @@ function applyI18n() {
   document.getElementById('jsonTitle').textContent = t('jsonTitle');
   document.getElementById('btnApply').textContent = t('apply');
   document.getElementById('btnCopy').textContent = t('copy');
+  document.getElementById('urdfTitle').textContent = t('urdfTitle');
+  document.getElementById('btnUrdfCopy').textContent = t('copy');
+  document.getElementById('btnUrdfSave').textContent = t('save');
   const btnShare = document.getElementById('btnShare');
   btnShare.textContent = t('share');
   btnShare.title = t('shareTip');
