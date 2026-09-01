@@ -59,9 +59,10 @@
   #viewport { grid-area: viewport; position: relative; min-width: 0; min-height: 0; }
   #viewport canvas { display: block; }
   #hint {
-    position: absolute; left: 12px; bottom: 10px;
+    position: absolute; left: 12px; bottom: 44px; /* над кнопкой Challenge */
     color: var(--muted); font-size: 12px; pointer-events: none;
   }
+  body.challenge #hint { display: none; }
   /* Инструменты 3D-окна: переключатель анимации + ссылка — левый верхний угол */
   #vpTools {
     position: absolute; left: 12px; top: 10px; z-index: 2;
@@ -104,6 +105,75 @@
   #fitToggle input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; margin: 0; }
   #fitToggle:hover, #btnExpand:hover, #btnPanel:hover { border-color: var(--accent); }
   #fitToggle.on, #btnExpand.on, #btnPanel.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* ---- Challenge mode: кнопка-тумблер и панель заданий — левый нижний угол 3D-окна ---- */
+  #chalTools { position: absolute; left: 12px; bottom: 10px; z-index: 2; display: flex; gap: 8px; }
+  #btnChal {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--overlay); border: 1px solid var(--border);
+    border-radius: 7px; padding: 5px 9px;
+    font: 600 12px/1.4 "Segoe UI", system-ui, sans-serif;
+    color: var(--text); cursor: pointer;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  }
+  #btnChal:hover { border-color: var(--accent); }
+  #btnChal.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  #chalPanel {
+    position: absolute; left: 12px; bottom: 46px; z-index: 3;
+    width: 320px; max-width: calc(100% - 24px); max-height: calc(100% - 120px);
+    overflow-y: auto;
+    background: var(--overlay); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 12.5px; line-height: 1.45;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    animation: hintIn .25s ease-out;
+  }
+  #chalPanel[hidden] { display: none; }
+  .chal-head { display: flex; align-items: center; font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+  .chal-head .chal-close { margin-left: auto; cursor: pointer; color: var(--muted); font-weight: 700; padding: 0 4px; }
+  .chal-head .chal-close:hover { color: var(--danger); }
+  .chal-tasks { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+  .chal-task { display: flex; gap: 6px; color: var(--muted); border-radius: 5px; padding: 1px 4px; margin: 0 -4px; }
+  .chal-task:not(.cur) { cursor: pointer; }
+  .chal-task:not(.cur):hover { color: var(--text); background: var(--accent-soft); }
+  .chal-task.cur { color: var(--text); font-weight: 600; }
+  .chal-task.done { color: var(--ok); }
+  .chal-desc { margin-bottom: 6px; }
+  .chal-status { color: var(--muted); }
+  .chal-status .ok { color: var(--ok); font-weight: 600; }
+  .chal-status .warn { color: var(--danger); }
+  .chal-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .chal-actions button {
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--panel2); color: var(--text);
+    padding: 5px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .chal-actions button:hover { border-color: var(--accent); }
+  .chal-actions button.primary { background: linear-gradient(135deg, #2b6cb0, #4da3ff); border-color: transparent; color: #fff; }
+  /* во время воспроизведения записи рукой управляет журнал, а не пользователь */
+  body.replaying #addRow, body.replaying #components, body.replaying #genRow,
+  body.replaying #chalActions, body.replaying #btnUndo { pointer-events: none; opacity: .55; }
+  /* вкладка «Запись» видна только в режиме заданий и заменяет JSON/URDF */
+  #tabs button[data-tab="actarea"] { display: none; }
+  body.challenge #tabs button[data-tab="actarea"] { display: block; }
+  body.challenge #tabs button[data-tab="jsonarea"], body.challenge #tabs button[data-tab="urdfarea"] { display: none; }
+  #actarea { background: var(--panel); }
+  #actList { flex: 1; overflow-y: auto; padding: 6px 12px 10px; font-size: 12.5px; }
+  .act {
+    display: flex; gap: 8px; align-items: center;
+    padding: 4px 6px; border-bottom: 1px solid var(--border-soft);
+  }
+  .act-n { color: var(--muted); min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+  .act-txt .ico { vertical-align: -2px; margin-right: 2px; }
+  .act.cur { background: var(--accent-soft); border-radius: 6px; }
+  .act.past { opacity: .6; }
+  #actEmpty { color: var(--muted); text-align: center; padding: 18px 8px; }
+  #actbar button:disabled { opacity: .45; cursor: default; }
+  #actLoop { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  #actLoop input { accent-color: var(--accent); margin: 0; cursor: pointer; }
+  #actLoop:has(input:checked) { color: var(--accent); }
 
   /* ---- Свёрнутая панель: от Parts/JSON/BOM остаются только кнопки
      Generate / Start New; на десктопе колонка сужается под них ---- */
@@ -358,18 +428,18 @@
 
   /* ---- JSON и URDF под 3D-окном ---- */
   #jsonarea, #urdfarea { background: var(--panel); }
-  #jsonbar, #urdfbar {
+  #jsonbar, #urdfbar, #actbar {
     display: flex; align-items: center; gap: 8px;
     padding: 6px 12px; border-bottom: 1px solid var(--border);
   }
-  #jsonbar .title, #urdfbar .title { font-weight: 600; font-size: 13px; flex: 1; }
-  #jsonbar button, #urdfbar button {
+  #jsonbar .title, #urdfbar .title, #actbar .title { font-weight: 600; font-size: 13px; flex: 1; }
+  #jsonbar button, #urdfbar button, #actbar button {
     background: var(--panel2); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 4px 12px; cursor: pointer; font-size: 13px;
   }
-  #jsonbar button:hover, #urdfbar button:hover { border-color: var(--accent); color: var(--accent); }
-  #jsonbar, #urdfbar { flex-wrap: wrap; }
+  #jsonbar button:hover, #urdfbar button:hover, #actbar button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+  #jsonbar, #urdfbar, #actbar { flex-wrap: wrap; }
   #jsonStatus, #urdfStatus { font-size: 12px; color: var(--muted); min-width: 0; text-align: right; }
   #jsonStatus.ok, #urdfStatus.ok { color: var(--ok); }
   #jsonStatus.err, #urdfStatus.err { color: var(--danger); }
@@ -412,6 +482,7 @@
     #animToggle, #btnShare { padding: 6px 10px; font-size: 12.5px; }
     #startHint { left: 12px; right: 12px; max-width: none; }
     #tutHint { top: 96px; left: 12px; right: 12px; max-width: none; } /* под двумя рядами кнопок */
+    #chalPanel { right: 12px; width: auto; max-height: 45%; font-size: 12px; }
     /* свёрнутая панель на мобильном: колонка одна, снизу только кнопки */
     body.panelCollapsed { grid-template-columns: minmax(0, 1fr); }
     body.panelCollapsed #genRow { margin-bottom: 8px; }
@@ -465,6 +536,14 @@
     <button id="btnExpand">⛶</button>
   </div>
   <div id="startHint" hidden></div>
+  <div id="chalPanel" hidden>
+    <div class="chal-head"><span id="chalTitle"></span><span class="chal-close" id="chalClose">✕</span></div>
+    <div class="chal-tasks" id="chalTasks"></div>
+    <div class="chal-desc" id="chalDesc"></div>
+    <div class="chal-status" id="chalStatus"></div>
+    <div class="chal-actions" id="chalActions"></div>
+  </div>
+  <div id="chalTools"><button id="btnChal"></button></div>
   <div id="hint"></div>
 </div>
 
@@ -477,6 +556,7 @@
     <button data-tab="components" class="active"></button>
     <button data-tab="jsonarea"></button>
     <button data-tab="urdfarea"></button>
+    <button data-tab="actarea"></button>
     <button data-tab="bom"></button>
   </div>
   <div id="components" class="tabpane active"></div>
@@ -497,6 +577,15 @@
       <button id="btnUrdfSave"></button>
     </div>
     <textarea id="urdfText" spellcheck="false" readonly></textarea>
+  </div>
+  <div id="actarea" class="tabpane">
+    <div id="actbar">
+      <span class="title" id="actTitle"></span>
+      <label id="actLoop"><input type="checkbox" id="chkLoop"><span id="loopLbl"></span></label>
+      <button id="btnActUndo"></button>
+      <button id="btnActReplay"></button>
+    </div>
+    <div id="actList"></div>
   </div>
   <div id="bom" class="tabpane">
     <h2 id="bomTitle"></h2>
@@ -533,7 +622,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* Версия проекта — инкрементируется при каждом заметном изменении */
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 
 /* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
    на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
@@ -656,6 +745,56 @@ const STR = {
   bomBase:    { en: 'Base kit & electronics',         ru: 'Базовый комплект и электроника' },
   bomAltTip:  { en: 'Common alternatives for this part',
                 ru: 'Распространённые замены для этой детали' },
+  /* --- Challenge mode --- */
+  chalBtn:    { en: '🏆 Challenge',                   ru: '🏆 Задания' },
+  chalTip:    { en: 'Challenge mode: three tasks for your arm',
+                ru: 'Режим заданий: три задачи для вашей руки' },
+  chalTitle:  { en: '🏆 Challenge',                   ru: '🏆 Задания' },
+  chalExit:   { en: 'Exit challenge mode',            ru: 'Выйти из режима заданий' },
+  chalTask1:  { en: 'Pick & place the cube',          ru: 'Перенести кубик' },
+  chalTask2:  { en: 'Drill 4 holes',                  ru: 'Просверлить 4 отверстия' },
+  chalTask3:  { en: 'Cut the billet in half',         ru: 'Распилить чушку пополам' },
+  chalDesc1:  { en: 'Grab the orange cube with a gripper, set it down inside the blue ring without touching the ring, then lift it over the walls into the green square.',
+                ru: 'Возьмите оранжевый кубик схватом, поставьте его внутрь синего кольца, не задев кольцо, а потом перенесите через стенки в зелёный квадрат.' },
+  chalDesc2:  { en: 'Drill the four corners of the square marked on the wall. The spindle must be running (Speed > 0); any depth counts.',
+                ru: 'Просверлите четыре угла квадрата, размеченного на стене. Шпиндель должен вращаться (Обороты > 0); глубина — любая.' },
+  chalDesc3:  { en: 'Cut the metal billet into two equal halves with the spinning mill — along the dashed ring.',
+                ru: 'Распилите металлическую чушку на две равные половины вращающейся фрезой — по пунктирному кольцу.' },
+  chalNeed:   { en: name => `⚠️ Add a "${name}" to the arm`, ru: name => `⚠️ Добавьте к руке «${name}»` },
+  chalStepGrab: { en: 'grab the cube',                ru: 'взять кубик' },
+  chalStepRing: { en: 'set it inside the ring',       ru: 'поставить в кольцо' },
+  chalStepPen:  { en: 'lift it into the square',      ru: 'перенести в квадрат' },
+  chalHeld:   { en: '✋ held by the gripper',          ru: '✋ предмет в схвате' },
+  chalGoTip:  { en: 'Click to switch to this task',    ru: 'Нажмите, чтобы перейти к этому заданию' },
+  chalHoles:  { en: (k, n) => `Holes drilled: ${k} / ${n}`, ru: (k, n) => `Отверстий: ${k} / ${n}` },
+  chalSpindleOff: { en: '🔩 the bit touches the wall, but the spindle is off',
+                    ru: '🔩 сверло касается стены, но шпиндель не вращается' },
+  chalCut:    { en: p => `Cut: ${p}%`,               ru: p => `Пропил: ${p}%` },
+  chalOffCut: { en: '✂️ an off-center cut doesn\'t count — the halves must be equal',
+                ru: '✂️ пропил не посередине не засчитан — половины должны быть равными' },
+  chalTaskDone: { en: '✅ Task complete!',            ru: '✅ Задание выполнено!' },
+  chalAllDone: { en: '🎉 All three tasks are done — your arm is a real worker!',
+                 ru: '🎉 Все три задания выполнены — ваша рука настоящий работяга!' },
+  chalReset:  { en: '↺ Reset task',                   ru: '↺ Сбросить' },
+  chalNext:   { en: 'Next task ▸',                    ru: 'Следующее ▸' },
+  tabLog:     { en: '📼 Log',                         ru: '📼 Запись' },
+  logTitle:   { en: 'Action log',                     ru: 'Запись действий' },
+  logEmpty:   { en: 'No actions yet — move the sliders or add components; every step is recorded here.',
+                ru: 'Действий пока нет — двигайте слайдеры или добавляйте компоненты; каждый шаг записывается сюда.' },
+  logUndo:    { en: '↶ Undo last',                    ru: '↶ Отменить' },
+  logReplay:  { en: '▶ Replay',                       ru: '▶ Проиграть' },
+  logStop:    { en: '⏹ Stop',                         ru: '⏹ Стоп' },
+  logLoop:    { en: '🔁 Loop',                         ru: '🔁 Цикл' },
+  logLoopTip: { en: 'Replay in a loop, from the start again after the last action',
+                ru: 'Повторять по кругу: после последнего действия — снова с начала' },
+  logParam:   { en: (name, i, p, a, b) => `${name} #${i} · ${p}: ${a} → ${b}`,
+                ru: (name, i, p, a, b) => `${name} #${i} · ${p}: ${a} → ${b}` },
+  logAdd:     { en: name => `Add: ${name}`,          ru: name => `Добавить: ${name}` },
+  logDel:     { en: (name, i) => `Remove: ${name} #${i}`, ru: (name, i) => `Удалить: ${name} #${i}` },
+  logConfig:  { en: n => `Rebuild the arm (${n} parts)`, ru: n => `Пересборка руки (${n} дет.)` },
+  logTask:    { en: i => `Go to task ${i}`,          ru: i => `Перейти к заданию ${i}` },
+  logReset:   { en: i => `Reset task ${i}`,          ru: i => `Сброс задания ${i}` },
+  logReplaying: { en: (i, n) => `▶ replaying ${i} / ${n}`, ru: (i, n) => `▶ воспроизведение ${i} / ${n}` },
 };
 
 const LANGS = ['en', 'ru'];
@@ -1300,8 +1439,13 @@ function buildArm() {
   if (components.length) startHint.hidden = true; // рука уже не пуста
 }
 
+/* смещение пальца от оси по раскрытию (ширина пальца 0.09) */
+function gripGap(c) { return 0.05 + (c.open ?? 50) / 100 * 0.18; }
+
 function applyGripper(c) {
-  const gap = 0.05 + (c.open ?? 50) / 100 * 0.18;
+  let gap = gripGap(c);
+  /* в режиме заданий пальцы упираются в удерживаемый кубик (c._holdSize) */
+  if (c._holdSize) gap = Math.max(gap, c._holdSize / 2 + 0.045);
   c._fingers[0].position.x = gap;
   c._fingers[1].position.x = -gap;
 }
@@ -1364,6 +1508,7 @@ function renderAddRow() {
       for (const p of ty.params) c[p.key] = p.def;
       pushUndo();
       components.push(c);
+      recordAction({ kind: 'add', i: components.length - 1, comp: clone(c) });
       buildArm();
       renderPanel();
       if (tutStep >= 0) advanceTutorial();
@@ -1409,7 +1554,15 @@ function renderPanel() {
     }
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = '✕'; del.title = t('remove');
-    del.onclick = () => { cancelTutorial(); pushUndo(); components.splice(i, 1); buildArm(); renderPanel(); };
+    del.onclick = () => {
+      cancelTutorial();
+      pushUndo();
+      const snap = cleanConfig()[i];
+      components.splice(i, 1);
+      buildArm();
+      renderPanel();
+      recordAction({ kind: 'del', i, comp: snap });
+    };
     head.appendChild(del);
     card.appendChild(head);
 
@@ -1426,9 +1579,19 @@ function renderPanel() {
       val.className = 'val';
       val.textContent = slider.value;
       slider.oninput = () => {
+        /* запись действий: одно перетаскивание слайдера — одна запись (from фиксируется в начале) */
+        if (chal && !chal.replay && c._actFrom?.[p.key] === undefined) {
+          (c._actFrom = c._actFrom || {})[p.key] = c[p.key] ?? p.def;
+        }
         c[p.key] = parseFloat(slider.value);
         val.textContent = slider.value;
         applyParam(c);
+      };
+      slider.onchange = () => {
+        const from = c._actFrom?.[p.key];
+        if (from === undefined) return;
+        delete c._actFrom[p.key];
+        recordAction({ kind: 'param', i: components.indexOf(c), type: c.type, key: p.key, from, to: c[p.key] });
       };
       c._sliders = c._sliders || {};
       c._sliders[p.key] = { slider, val };
@@ -1463,19 +1626,29 @@ function showBadLink() {
 const _box = new THREE.Box3(), _tmpBox = new THREE.Box3(), _sphere = new THREE.Sphere();
 const _frustum = new THREE.Frustum(), _projScreen = new THREE.Matrix4();
 
-/* ограничивающая сфера видимой части руки */
-function armSphere() {
+/* ограничивающая сфера видимой геометрии перечисленных корней */
+function boundsSphere(roots) {
   _box.makeEmpty();
-  armRoot.updateWorldMatrix(true, true);
-  armRoot.traverseVisible(o => {
-    const g = o.geometry;
-    if (!g) return;
-    if (!g.boundingBox) g.computeBoundingBox();
-    _tmpBox.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
-    _box.union(_tmpBox);
-  });
+  for (const root of roots) {
+    root.updateWorldMatrix(true, true);
+    root.traverseVisible(o => {
+      const g = o.geometry;
+      if (!g) return;
+      if (o.isInstancedMesh) {
+        if (!o.boundingBox) o.computeBoundingBox();
+        _tmpBox.copy(o.boundingBox);
+      } else {
+        if (!g.boundingBox) g.computeBoundingBox();
+        _tmpBox.copy(g.boundingBox);
+      }
+      _box.union(_tmpBox.applyMatrix4(o.matrixWorld));
+    });
+  }
   return _box.isEmpty() ? null : _box.getBoundingSphere(_sphere);
 }
+
+/* ограничивающая сфера видимой части руки */
+function armSphere() { return boundsSphere([armRoot]); }
 
 /* плавно отодвигает камеру, если рука вылезает за кадр (только наружу) */
 function cameraAutoExpand() {
@@ -1497,8 +1670,9 @@ function cameraAutoExpand() {
 }
 
 /* полный сброс кадра под текущую руку (после генерации) */
-function fitCameraToArm() {
-  const s = armSphere();
+function fitCameraToArm() { fitCameraToSphere(armSphere()); }
+
+function fitCameraToSphere(s) {
   if (!s) return;
   const vHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
   const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
@@ -1559,9 +1733,7 @@ function generateArm() {
   }
 
   pushUndo();
-  components = c;
-  buildArm();
-  renderPanel();
+  withLog(() => { components = c; buildArm(); renderPanel(); });
   fitCameraToArm(); // сброс камеры — только при генерации новой руки
 }
 
@@ -1573,9 +1745,7 @@ document.getElementById('btnGenerate').onclick = generateArm;
 function newProject() {
   cancelTutorial();
   if (components.length) pushUndo();
-  components = [];
-  buildArm();
-  renderPanel();
+  withLog(() => { components = []; buildArm(); renderPanel(); });
   camera.position.copy(CAM_HOME.pos);
   controls.target.copy(CAM_HOME.target);
   showStartHint();
@@ -1585,16 +1755,13 @@ document.getElementById('btnNew').onclick = newProject;
 
 /* ================= Вкладки панели ================= */
 
-for (const btn of document.querySelectorAll('#tabs button')) {
-  btn.onclick = () => {
-    for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('active', b === btn);
-    for (const pane of document.querySelectorAll('.tabpane')) {
-      pane.classList.toggle('active', pane.id === btn.dataset.tab);
-    }
-    if (btn.dataset.tab === 'jsonarea') updateJSONView();
-    if (btn.dataset.tab === 'urdfarea') updateURDFView();
-  };
+function selectTab(id) {
+  for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('active', b.dataset.tab === id);
+  for (const pane of document.querySelectorAll('.tabpane')) pane.classList.toggle('active', pane.id === id);
+  if (id === 'jsonarea') updateJSONView();
+  if (id === 'urdfarea') updateURDFView();
 }
+for (const btn of document.querySelectorAll('#tabs button')) btn.onclick = () => selectTab(btn.dataset.tab);
 
 /* ================= BOM: список закупки ================= */
 
@@ -1903,9 +2070,7 @@ document.getElementById('btnApply').onclick = () => {
     const data = validateConfig(JSON.parse(jsonText.value));
     cancelTutorial();
     pushUndo();
-    components = data;
-    buildArm();
-    renderPanel();
+    withLog(() => { components = data; buildArm(); renderPanel(); });
     setStatus(t('applied'), 'ok');
   } catch (e) {
     setStatus(t('errPrefix', e.message), 'err');
@@ -2508,10 +2673,9 @@ function pushUndo() {
 btnUndo.onclick = () => {
   if (!undoStack.length) return;
   cancelTutorial();
-  components = JSON.parse(undoStack.pop());
+  const snap = undoStack.pop();
   btnUndo.hidden = !undoStack.length;
-  buildArm();
-  renderPanel();
+  withLog(() => { components = JSON.parse(snap); buildArm(); renderPanel(); });
 };
 
 /* Восстановление руки из ссылки: ?c= — цифровой код (основной формат),
@@ -2710,6 +2874,7 @@ function showTutStep(msgOverride) {
 
 function startTutorial() {
   hideTutModal();
+  stopChallenge(); // задания и обучение одновременно не ведём
   document.body.classList.remove('expanded'); // панель кнопок должна быть видна
   btnExpand.classList.remove('on');
   setPanelCollapsed(true); // панель не должна закрывать руку (особенно на мобильных)
@@ -2751,6 +2916,793 @@ function cancelTutorial() {
   setPanelCollapsed(false); // обучение закончено — вернуть панель
 }
 
+/* ================= Challenge mode: три задания для собранной руки ================= */
+
+/* Объекты заданий живут в chalRoot отдельно от руки: в JSON/URDF/BOM они не попадают.
+   Состояние режима — chal (null = выключен). Задание 1 — кубик, плоское кольцо и
+   квадрат-загон со стенками (захват схватом + гравитация); задание 2 — стена, в
+   которой сверло вырезает цилиндры (шейдер стены отбрасывает фрагменты внутри
+   отверстий, стенки отверстия — отдельный меш); задание 3 — воксельная чушка,
+   которую фреза пилит пополам (воксели внутри диска фрезы исчезают).
+   Все действия пользователя в режиме пишутся в chal.log (вкладка «Запись»):
+   последнее можно отменить, всю последовательность — проиграть заново с физикой. */
+const chalRoot = new THREE.Group();
+scene.add(chalRoot);
+
+const CHAL = {
+  cube:   { size: 0.24, pos: [0.4, 1.6], color: 0xf2a03d },
+  ring:   { pos: [1.5, 0.5], rIn: 0.3, rOut: 0.36, color: 0x2f7fff },
+  pen:    { pos: [-1.0, 1.2], half: 0.25, wall: 0.03, height: 0.08, color: 0x35c26a },
+  wall:   { x: -1.85, thick: 0.12, height: 1.2, width: 1.4, color: 0xcdbfa3, bore: 0x454a52,
+            square: { y: 0.65, side: 0.5 }, tol: 0.075, maxHoles: 12 },
+  drill:  { r: 0.035, len: 0.34 },        // размеры сверла — из buildArm()
+  billet: { pos: [-0.2, 1.5], r: 0.14, len: 0.8, voxel: 0.02, color: 0xaeb6c0, midTol: 4 },
+  mill:   { r: 0.27, halfThick: 0.045 },  // диск фрезы вместе с зубьями — из buildArm()
+  /* окно захвата в системе координат схвата: где должен быть центр кубика */
+  grip:   { minY: 0.2, maxY: 0.62, maxX: 0.07, maxZ: 0.14, tol: 0.03 },
+  g: 6,                                    // ускорение падения, ед/с²
+};
+const CHAL_TOOLS = ['gripper', 'drill', 'mill']; // нужный наконечник для каждого задания
+
+let chal = null;
+const btnChal = document.getElementById('btnChal');
+const chalPanel = document.getElementById('chalPanel');
+const actList = document.getElementById('actList');
+
+/* ---- общие утилиты ---- */
+const _cm = new THREE.Matrix4(), _cs = new THREE.Vector3(), _cv = new THREE.Vector3();
+const _inv = new THREE.Matrix4(), _zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const CUBE_CORNERS = [];
+for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) CUBE_CORNERS.push(new THREE.Vector3(sx, sy, sz));
+
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+function disposeGroup(g) {
+  g.traverse(o => {
+    o.geometry?.dispose();
+    if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+  });
+  g.clear();
+}
+
+function insideBox(p, min, max) {
+  return p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y && p.z >= min.z && p.z <= max.z;
+}
+
+/* пересечение луча с AABB (slab): [tNear, tFar] или null */
+function rayBox(o, d, min, max) {
+  let tn = -Infinity, tf = Infinity;
+  for (const k of ['x', 'y', 'z']) {
+    if (Math.abs(d[k]) < 1e-9) { if (o[k] < min[k] || o[k] > max[k]) return null; continue; }
+    let t1 = (min[k] - o[k]) / d[k], t2 = (max[k] - o[k]) / d[k];
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    tn = Math.max(tn, t1); tf = Math.min(tf, t2);
+    if (tn > tf) return null;
+  }
+  return [tn, tf];
+}
+
+/* просвет между пальцами схвата по текущему раскрытию */
+function gripInner(c) { return 2 * gripGap(c) - 0.09; }
+
+/* ---- Предметы, которые можно взять схватом (кубик, чушка): захват, удержание, гравитация ---- */
+
+function holdable(obj, kind) {
+  return { obj, kind, vy: 0, resting: true, grabbed: false,
+           prevPos: obj.position.clone(), prevQuat: obj.quaternion.clone() };
+}
+
+/* след кубика на полу: AABB проекций 8 вершин, самая нижняя точка, сами вершины */
+function cubeFootprint(cube) {
+  cube.updateMatrixWorld(true);
+  const h = CHAL.cube.size / 2;
+  const fp = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, minY: Infinity, pts: [] };
+  for (const o of CUBE_CORNERS) {
+    const p = _cv.copy(o).multiplyScalar(h).applyMatrix4(cube.matrixWorld);
+    fp.minX = Math.min(fp.minX, p.x); fp.maxX = Math.max(fp.maxX, p.x);
+    fp.minZ = Math.min(fp.minZ, p.z); fp.maxZ = Math.max(fp.maxZ, p.z);
+    fp.minY = Math.min(fp.minY, p.y);
+    fp.pts.push(p.clone());
+  }
+  return fp;
+}
+
+function cubeInPen(fp) {
+  const P = CHAL.pen, cx = P.pos[0], cz = P.pos[1];
+  return fp.minX >= cx - P.half && fp.maxX <= cx + P.half && fp.minZ >= cz - P.half && fp.maxZ <= cz + P.half;
+}
+
+function cubeInRing(fp) {
+  const R = CHAL.ring;
+  return fp.pts.every(p => Math.hypot(p.x - R.pos[0], p.z - R.pos[1]) < R.rIn);
+}
+
+/* высота, на которой кубик остановится: пол или верх стенки загона, если след её задевает */
+function penRest(fp) {
+  const P = CHAL.pen, cx = P.pos[0], cz = P.pos[1], o = P.half + P.wall;
+  const hitsOuter = fp.minX < cx + o && fp.maxX > cx - o && fp.minZ < cz + o && fp.maxZ > cz - o;
+  if (!hitsOuter) return 0;
+  return cubeInPen(fp) ? 0 : P.height;
+}
+
+/* самая нижняя точка предмета */
+function lowestY(h) {
+  if (h.kind === 'cube') return cubeFootprint(h.obj).minY;
+  const B = CHAL.billet, a = _cv.set(0, 0, 1).applyQuaternion(h.obj.quaternion);
+  return h.obj.position.y - (B.len / 2 * Math.abs(a.y) + B.r * Math.sqrt(Math.max(0, 1 - a.y * a.y)));
+}
+
+/* высота покоя предмета: стенки загона учитываются только для кубика в задании 1 */
+function restHeight(h) {
+  return h.kind === 'cube' && chal.t1 ? penRest(cubeFootprint(h.obj)) : 0;
+}
+
+/* ширина предмета между пальцами */
+function holdSize(h) { return h.kind === 'cube' ? CHAL.cube.size : CHAL.billet.r * 2; }
+
+/* точка предмета, которую сжимают пальцы, в системе схвата:
+   центр кубика или ближайшая к пальцам точка оси чушки */
+function graspPoint(h, pivot) {
+  if (h.kind === 'cube') return pivot.worldToLocal(h.obj.position.clone());
+  const B = CHAL.billet, a = new THREE.Vector3(0, 0, 1).applyQuaternion(h.obj.quaternion);
+  const fingers = pivot.localToWorld(new THREE.Vector3(0, 0.37, 0));
+  const t = THREE.MathUtils.clamp(fingers.sub(h.obj.position).dot(a), -B.len / 2, B.len / 2);
+  return pivot.worldToLocal(h.obj.position.clone().addScaledVector(a, t));
+}
+
+/* приземление: предмет выравнивается по полу, сохраняя поворот вокруг вертикали */
+function settle(h, rest) {
+  const o = h.obj;
+  if (h.kind === 'cube') {
+    _cv.set(1, 0, 0).applyQuaternion(o.quaternion);
+    o.rotation.set(0, Math.atan2(-_cv.z, _cv.x), 0);
+    o.position.y = rest + CHAL.cube.size / 2;
+    return;
+  }
+  const B = CHAL.billet, a = _cv.set(0, 0, 1).applyQuaternion(o.quaternion);
+  if (Math.abs(a.y) > 0.7) { o.rotation.set(-Math.PI / 2, 0, 0); o.position.y = rest + B.len / 2; } // на торец
+  else { o.rotation.set(0, Math.atan2(a.x, a.z), 0); o.position.y = rest + B.r; }                  // на бок
+}
+
+function releaseHeld() {
+  const H = chal.held;
+  if (!H) return;
+  chal.held = null;
+  delete H.comp._holdSize;
+  if (H.comp._fingers) applyGripper(H.comp);
+  H.h.vy = 0;
+}
+
+/* захват, удержание, столкновения и падение всех предметов задания */
+function tickHold(dt) {
+  const G = CHAL.grip, H = chal.held;
+  if (H) {
+    const i = components.indexOf(H.comp), h = H.h, o = h.obj;
+    if (i < 0 || gripInner(H.comp) > holdSize(h) + G.tol) releaseHeld(); // пальцы разжались
+    else {
+      _cm.multiplyMatrices(pivots[i].matrixWorld, H.holdM).decompose(o.position, o.quaternion, _cs);
+      const rest = restHeight(h), low = lowestY(h);
+      if (low < rest - 0.004) {
+        /* упёрся в пол или стенку загона — выскальзывает из пальцев */
+        releaseHeld();
+        if (rest === 0) o.position.y -= low;
+        else { o.position.copy(h.prevPos); o.quaternion.copy(h.prevQuat); }
+      }
+    }
+  }
+  if (!chal.held) {
+    /* попытка захвата: предмет между пальцами, и пальцы только что сомкнулись на нём */
+    for (const c of components) {
+      if (c.type !== 'gripper') continue;
+      const pivot = pivots[components.indexOf(c)];
+      const inner = gripInner(c), prev = c._prevInner ?? inner;
+      c._prevInner = inner;
+      if (!pivot) continue;
+      for (const h of chal.holdables) {
+        const size = holdSize(h);
+        if (inner > size + G.tol) continue;
+        if (inner < size - G.tol && prev < size + G.tol) continue; // были сомкнуты и раньше
+        const lp = graspPoint(h, pivot);
+        if (Math.abs(lp.x) > G.maxX || Math.abs(lp.z) > G.maxZ || lp.y < G.minY || lp.y > G.maxY) continue;
+        h.obj.updateMatrixWorld(true);
+        chal.held = { h, comp: c, holdM: pivot.matrixWorld.clone().invert().multiply(h.obj.matrixWorld) };
+        c._holdSize = size;
+        applyGripper(c);
+        h.vy = 0; h.resting = false; h.grabbed = true;
+        break;
+      }
+      if (chal.held) break;
+    }
+  }
+  for (const h of chal.holdables) {
+    if (chal.held?.h !== h) {
+      /* гравитация */
+      let rest = restHeight(h), low = lowestY(h);
+      if (low > rest + 0.003 || h.vy !== 0) {
+        h.vy -= CHAL.g * dt;
+        h.obj.position.y += h.vy * dt;
+        h.resting = false;
+        rest = restHeight(h); low = lowestY(h);
+        if (low <= rest) { settle(h, rest); h.vy = 0; h.resting = true; }
+      } else h.resting = true;
+    }
+    h.prevPos.copy(h.obj.position);
+    h.prevQuat.copy(h.obj.quaternion);
+  }
+}
+
+/* ---- Задание 1: кубик, кольцо, загон ---- */
+
+function buildTask1() {
+  const S = CHAL.cube, R = CHAL.ring, P = CHAL.pen;
+  const cube = shadowed(new THREE.Mesh(new THREE.BoxGeometry(S.size, S.size, S.size), mat(S.color)));
+  cube.position.set(S.pos[0], S.size / 2, S.pos[1]);
+  /* синее кольцо нулевой высоты */
+  const ring = new THREE.Mesh(new THREE.RingGeometry(R.rIn, R.rOut, 64),
+    new THREE.MeshBasicMaterial({ color: R.color, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(R.pos[0], 0.003, R.pos[1]);
+  /* зелёный квадрат-загон: четыре низкие стенки + едва заметная заливка */
+  const pen = new THREE.Group();
+  pen.position.set(P.pos[0], 0, P.pos[1]);
+  const o = P.half + P.wall, wm = mat(P.color);
+  for (const [x, z, w, d] of [[o - P.wall / 2, 0, P.wall, o * 2], [P.wall / 2 - o, 0, P.wall, o * 2],
+                              [0, o - P.wall / 2, o * 2, P.wall], [0, P.wall / 2 - o, o * 2, P.wall]]) {
+    const side = shadowed(new THREE.Mesh(new THREE.BoxGeometry(w, P.height, d), wm));
+    side.position.set(x, P.height / 2, z);
+    pen.add(side);
+  }
+  const fill = new THREE.Mesh(new THREE.PlaneGeometry(P.half * 2, P.half * 2),
+    new THREE.MeshBasicMaterial({ color: P.color, transparent: true, opacity: 0.18, depthWrite: false }));
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.y = 0.003;
+  pen.add(fill);
+  chalRoot.add(cube, ring, pen);
+  chal.holdables = [holdable(cube, 'cube')];
+  chal.t1 = { cube, phase: 0 };
+}
+
+/* цели по порядку: сначала кольцо, потом загон; кубик должен стоять на полу */
+function tickTask1() {
+  const T = chal.t1, h = chal.holdables[0];
+  if (!h.resting || chal.held?.h === h) return;
+  const fp = cubeFootprint(h.obj);
+  if (fp.minY > 0.01 || penRest(fp) !== 0) return;
+  if (T.phase === 0 && cubeInRing(fp)) T.phase = 1;
+  else if (T.phase === 1 && cubeInPen(fp)) { T.phase = 2; completeTask(); }
+}
+
+/* ---- Задание 2: стена и четыре отверстия ---- */
+
+function buildTask2() {
+  const W = CHAL.wall;
+  const vec3s = () => Array.from({ length: W.maxHoles }, () => new THREE.Vector3(0, 1, 0));
+  const uni = {
+    uHoleN: { value: 0 },
+    uHoleP: { value: vec3s() },
+    uHoleD: { value: vec3s() },
+    uHoleLR: { value: Array.from({ length: W.maxHoles }, () => new THREE.Vector2()) },
+  };
+  /* стена — обычный материал, но фрагменты внутри цилиндров отверстий отбрасываются */
+  const wm = new THREE.MeshStandardMaterial({ color: W.color, roughness: 0.85, metalness: 0.05 });
+  wm.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, uni);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHolePos;')
+      .replace('#include <worldpos_vertex>',
+        '#include <worldpos_vertex>\nvHolePos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec3 vHolePos;
+        uniform int uHoleN;
+        uniform vec3 uHoleP[${W.maxHoles}];
+        uniform vec3 uHoleD[${W.maxHoles}];
+        uniform vec2 uHoleLR[${W.maxHoles}];`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        for (int i = 0; i < ${W.maxHoles}; i++) {
+          if (i >= uHoleN) break;
+          vec3 q = vHolePos - uHoleP[i];
+          float tt = dot(q, uHoleD[i]);
+          if (tt > -0.01 && tt < uHoleLR[i].x + 0.004 && length(q - tt * uHoleD[i]) < uHoleLR[i].y) discard;
+        }`);
+  };
+  const wall = shadowed(new THREE.Mesh(new THREE.BoxGeometry(W.thick, W.height, W.width), wm));
+  wall.position.set(W.x - W.thick / 2, W.height / 2, 0);
+  /* разметка на лицевой грани (смотрит на руку, +X): контур квадрата и метки по углам */
+  const fx = W.x + 0.003, s = W.square.side / 2, cy = W.square.y;
+  const outline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(fx, cy - s, -s), new THREE.Vector3(fx, cy - s, s),
+    new THREE.Vector3(fx, cy + s, s), new THREE.Vector3(fx, cy + s, -s),
+  ]), new THREE.LineBasicMaterial({ color: 0x2b3038 }));
+  const corners = [], marks = [];
+  for (const [dy, dz] of [[-s, -s], [-s, s], [s, s], [s, -s]]) {
+    corners.push(new THREE.Vector3(W.x, cy + dy, dz));
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.045, 0.065, 24),
+      new THREE.MeshBasicMaterial({ color: 0xff5c5c, side: THREE.DoubleSide }));
+    m.rotation.y = Math.PI / 2;
+    m.position.set(fx, cy + dy, dz);
+    marks.push(m);
+  }
+  chalRoot.add(wall, outline, ...marks);
+  chal.holdables = [];
+  chal.t2 = {
+    uni, holes: [], corners, marks, drilled: [false, false, false, false], spindleOff: false,
+    min: new THREE.Vector3(W.x - W.thick, 0, -W.width / 2), max: new THREE.Vector3(W.x, W.height, W.width / 2),
+  };
+}
+
+/* внутренняя поверхность отверстия: трубка (изнутри) + дно, пока отверстие глухое */
+function makeBore() {
+  const W = CHAL.wall, r = CHAL.drill.r * 1.03; // чуть шире выреза — стык не просвечивает
+  const g = new THREE.Group();
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 20, 1, true),
+    new THREE.MeshStandardMaterial({ color: W.bore, roughness: 0.9, side: THREE.BackSide }));
+  const cap = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshStandardMaterial({ color: W.bore, roughness: 0.9 }));
+  cap.rotation.x = Math.PI / 2; // нормаль −Y — ко входу отверстия
+  g.add(tube, cap);
+  g.visible = false;
+  chalRoot.add(g);
+  return g;
+}
+
+function updateBore(h) {
+  const g = h.mesh;
+  g.position.copy(h.p).addScaledVector(h.d, h.L / 2);
+  g.quaternion.setFromUnitVectors(Y_AXIS, h.d);
+  g.children[0].scale.y = h.L;
+  g.children[1].position.y = h.L / 2;
+  g.children[1].visible = h.L < h.maxL - 0.003; // сквозное — без дна
+  g.visible = h.L > 0.002;
+}
+
+function syncHoleUniforms() {
+  const T = chal.t2, u = T.uni;
+  u.uHoleN.value = T.holes.length;
+  T.holes.forEach((h, i) => {
+    u.uHoleP.value[i].copy(h.p);
+    u.uHoleD.value[i].copy(h.d);
+    u.uHoleLR.value[i].set(h.L, CHAL.drill.r);
+  });
+}
+
+function tickDrill() {
+  const T = chal.t2, W = CHAL.wall, D = CHAL.drill;
+  T.spindleOff = false;
+  let changed = false;
+  for (const c of components) {
+    if (c.type !== 'drill' || !c._spin) continue;
+    const base = c._spin.getWorldPosition(new THREE.Vector3());
+    const tip = c._spin.localToWorld(new THREE.Vector3(0, D.len, 0));
+    if (!insideBox(tip, T.min, T.max)) continue;
+    if ((c.speed ?? 0) <= 0) { T.spindleOff = true; continue; } // без оборотов не сверлит
+    const dir = tip.clone().sub(base).normalize();
+    /* сверло уже в своём отверстии? иначе — новое от точки входа в стену */
+    let hole = T.holes.find(h => {
+      const q = tip.clone().sub(h.p), tt = q.dot(h.d);
+      return tt > -0.05 && h.d.dot(dir) > 0.9 && q.addScaledVector(h.d, -tt).length() < D.r * 1.5;
+    });
+    if (!hole) {
+      const hit = rayBox(base, dir, T.min, T.max);
+      if (!hit || hit[0] < 0 || T.holes.length >= W.maxHoles) continue;
+      hole = { p: base.clone().addScaledVector(dir, hit[0]), d: dir, L: 0,
+               maxL: Math.min(D.len, hit[1] - hit[0]), mesh: makeBore() };
+      T.holes.push(hole);
+    }
+    const depth = Math.min(hole.maxL, tip.clone().sub(hole.p).dot(hole.d));
+    if (depth > hole.L) { hole.L = depth; updateBore(hole); changed = true; }
+  }
+  if (!changed) return;
+  syncHoleUniforms();
+  T.drilled = T.corners.map((ck, k) => T.drilled[k]
+    || T.holes.some(h => h.L > 0.003 && h.p.distanceTo(ck) < W.tol));
+  T.marks.forEach((m, k) => m.material.color.setHex(T.drilled[k] ? 0x35c26a : 0xff5c5c));
+  if (T.drilled.every(Boolean)) completeTask();
+}
+
+/* ---- Задание 3: воксельная чушка и фреза ---- */
+
+function buildTask3() {
+  const B = CHAL.billet, vs = B.voxel;
+  const nz = Math.round(B.len / vs), nr = Math.ceil(B.r / vs);
+  const xs = [], sl = [];
+  for (let iz = 0; iz < nz; iz++) {
+    const z = -B.len / 2 + (iz + 0.5) * vs;
+    for (let ix = -nr; ix < nr; ix++) for (let iy = -nr; iy < nr; iy++) {
+      const x = (ix + 0.5) * vs, y = (iy + 0.5) * vs;
+      if (Math.hypot(x, y) > B.r - vs * 0.2) continue;
+      xs.push(x, y, z);
+      sl.push(iz);
+    }
+  }
+  const n = sl.length;
+  const im = new THREE.InstancedMesh(new THREE.BoxGeometry(vs, vs, vs),
+    new THREE.MeshStandardMaterial({ color: B.color, roughness: 0.35, metalness: 0.6 }), n);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) im.setMatrixAt(i, m.makeTranslation(xs[3 * i], xs[3 * i + 1], xs[3 * i + 2]));
+  im.castShadow = im.receiveShadow = true;
+  const sliceCount = new Int32Array(nz), sliceTotal = new Int32Array(nz);
+  for (const s of sl) { sliceCount[s]++; sliceTotal[s]++; }
+  /* чушка — группа (ось — локальная Z), лежит на боку; её можно взять схватом и перенести */
+  const group = new THREE.Group();
+  group.position.set(B.pos[0], B.r, B.pos[1]);
+  /* пунктирное кольцо посередине — линия распила, едет вместе с чушкой */
+  const pts = [];
+  for (let k = 0; k <= 48; k++) {
+    const a = k / 48 * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * (B.r + 0.015), Math.sin(a) * (B.r + 0.015), 0));
+  }
+  group.add(im, makeDashedLine(0xff5c5c, pts));
+  chalRoot.add(group);
+  chal.holdables = [holdable(group, 'billet')];
+  chal.t3 = { im, group, pos: new Float32Array(xs), slice: sl, alive: new Uint8Array(n).fill(1),
+              sliceCount, sliceTotal, nz, offCut: false, progress: 0 };
+}
+
+function tickMill() {
+  const T = chal.t3, M = CHAL.mill, B = CHAL.billet;
+  let changed = false;
+  T.group.updateMatrixWorld(true);
+  for (const c of components) {
+    if (c.type !== 'mill' || !c._spin || (c.speed ?? 0) <= 0) continue;
+    if (c._spin.getWorldPosition(_cv).distanceTo(T.group.position) > B.len / 2 + B.r + M.r) continue;
+    /* воксель исчезает, если попал внутрь диска фрезы (в её локальной системе) */
+    const e = _inv.copy(c._spin.matrixWorld).invert().multiply(T.group.matrixWorld).elements;
+    const P = T.pos, r2 = M.r * M.r;
+    for (let i = 0; i < T.alive.length; i++) {
+      if (!T.alive[i]) continue;
+      const x = P[3 * i], y = P[3 * i + 1], z = P[3 * i + 2];
+      const ly = e[1] * x + e[5] * y + e[9] * z + e[13];
+      if (Math.abs(ly) > M.halfThick) continue;
+      const lx = e[0] * x + e[4] * y + e[8] * z + e[12];
+      const lz = e[2] * x + e[6] * y + e[10] * z + e[14];
+      if (lx * lx + lz * lz > r2) continue;
+      T.alive[i] = 0;
+      T.sliceCount[T.slice[i]]--;
+      T.im.setMatrixAt(i, _zeroM);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  T.im.instanceMatrix.needsUpdate = true;
+  /* пустой слой = чушка разделена; засчитывается только слой около середины,
+     лишние пропилы в других местах не мешают */
+  const mid = (T.nz - 1) / 2;
+  let minFrac = 1, emptyMid = false, emptyOff = false;
+  for (let iz = 0; iz < T.nz; iz++) {
+    const inMid = Math.abs(iz - mid) <= CHAL.billet.midTol;
+    if (inMid) minFrac = Math.min(minFrac, T.sliceCount[iz] / T.sliceTotal[iz]);
+    if (T.sliceCount[iz] === 0) { if (inMid) emptyMid = true; else emptyOff = true; }
+  }
+  T.progress = Math.round((1 - minFrac) * 100);
+  T.offCut = emptyOff;
+  if (emptyMid) completeTask();
+}
+
+/* ---- Состояние режима, задания, панель ---- */
+
+function startChallenge() {
+  if (chal) return;
+  cancelTutorial();
+  /* авто-анимация двигала бы руку сама — задания решает пользователь */
+  chkAnimate.checked = false;
+  syncAnimToggle();
+  for (const c of components) delete c._animBase;
+  chal = { task: 0, done: [false, false, false], lastNow: 0, lastHud: 0, held: null, holdables: [],
+           log: [], replay: null, startConfig: cleanConfig() };
+  document.body.classList.add('challenge');
+  btnChal.classList.add('on');
+  chalPanel.hidden = false;
+  setTask(0);
+  const active = document.querySelector('#tabs button.active')?.dataset.tab;
+  if (active === 'jsonarea' || active === 'urdfarea') selectTab('actarea');
+  renderLog();
+}
+
+function stopChallenge() {
+  if (!chal) return;
+  stopReplay();
+  clearTask();
+  chal = null;
+  document.body.classList.remove('challenge');
+  btnChal.classList.remove('on');
+  chalPanel.hidden = true;
+  if (document.querySelector('#tabs button.active')?.dataset.tab === 'actarea') selectTab('components');
+}
+
+function clearTask() {
+  releaseHeld();
+  disposeGroup(chalRoot);
+  chal.holdables = [];
+  chal.t1 = chal.t2 = chal.t3 = null;
+}
+
+/* стартовая поза каждого задания: рука вверх — все углы, выдвижения и позиции в 0,
+   шпиндели выключены, схват раскрыт */
+function resetPose() {
+  for (const c of components) {
+    if (c.type === 'link' || c.type === 'offset') continue;
+    for (const p of TYPES[c.type].params) {
+      c[p.key] = c.type === 'gripper' ? p.max : Math.min(p.max, Math.max(p.min, 0));
+    }
+    delete c._actFrom;
+  }
+  buildArm();
+  renderPanel();
+}
+
+function setTask(i) {
+  clearTask();
+  chal.task = i;
+  chal.done[i] = false;
+  resetPose();
+  [buildTask1, buildTask2, buildTask3][i]();
+  /* при воспроизведении камерой управляет пользователь — не трогаем */
+  if (!chal.replay) fitCameraToSphere(boundsSphere([armRoot, chalRoot]));
+  renderChalHUD();
+}
+
+function gotoTask(i) {
+  const from = chal.task;
+  setTask(i);
+  recordAction({ kind: 'task', from, to: i });
+}
+
+function resetTask() {
+  setTask(chal.task);
+  recordAction({ kind: 'reset', task: chal.task });
+}
+
+function completeTask() {
+  if (chal.done[chal.task]) return;
+  chal.done[chal.task] = true;
+  renderChalHUD();
+}
+
+function renderChalHUD() {
+  if (!chal) return;
+  document.getElementById('chalTitle').textContent = t('chalTitle');
+  document.getElementById('chalClose').title = t('chalExit');
+  const tasks = document.getElementById('chalTasks');
+  tasks.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const row = document.createElement('div');
+    row.className = 'chal-task' + (i === chal.task ? ' cur' : '') + (chal.done[i] ? ' done' : '');
+    row.innerHTML = `<span>${chal.done[i] ? '✅' : i === chal.task ? '▶' : '○'}</span>`
+      + `<span>${i + 1}. ${t('chalTask' + (i + 1))}</span>`;
+    if (i !== chal.task) {
+      row.title = t('chalGoTip');
+      row.onclick = () => { if (!chal.replay) gotoTask(i); }; // задания — в любом порядке
+    }
+    tasks.appendChild(row);
+  }
+  document.getElementById('chalDesc').textContent = t('chalDesc' + (chal.task + 1));
+  const actions = document.getElementById('chalActions');
+  actions.innerHTML = '';
+  const mk = (label, cb, primary) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (primary) b.className = 'primary';
+    b.onclick = cb;
+    actions.appendChild(b);
+  };
+  const next = [1, 2].map(k => (chal.task + k) % 3).find(k => !chal.done[k]);
+  if (chal.done.every(Boolean)) {
+    mk(t('logReplay'), startReplay, true);
+    mk(t('chalExit'), stopChallenge);
+  } else if (chal.done[chal.task]) {
+    mk(t('chalNext'), () => gotoTask(next), true);
+  } else {
+    mk(t('chalReset'), resetTask);
+  }
+  renderChalStatus();
+}
+
+/* динамическая часть панели: шаги, счётчики, предупреждения */
+function renderChalStatus() {
+  if (!chal) return;
+  const need = CHAL_TOOLS[chal.task], lines = [];
+  if (chal.done[chal.task]) {
+    lines.push(`<span class="ok">${t(chal.done.every(Boolean) ? 'chalAllDone' : 'chalTaskDone')}</span>`);
+  } else if (!components.some(c => c.type === need)) {
+    lines.push(`<span class="warn">${t('chalNeed', tr(TYPES[need].label))}</span>`);
+  }
+  if (chal.task === 0 && chal.t1) {
+    const T = chal.t1, step = (ok, key) => `${ok ? '✅' : '○'} ${t(key)}`;
+    lines.push(step(chal.holdables[0].grabbed, 'chalStepGrab'), step(T.phase >= 1, 'chalStepRing'),
+               step(T.phase >= 2, 'chalStepPen'));
+  } else if (chal.task === 1 && chal.t2) {
+    lines.push(t('chalHoles', chal.t2.drilled.filter(Boolean).length, 4));
+    if (chal.t2.spindleOff) lines.push(`<span class="warn">${t('chalSpindleOff')}</span>`);
+  } else if (chal.task === 2 && chal.t3) {
+    lines.push(t('chalCut', chal.t3.progress));
+    if (chal.t3.offCut && !chal.done[2]) lines.push(`<span class="warn">${t('chalOffCut')}</span>`);
+  }
+  if (chal.held) lines.push(t('chalHeld'));
+  if (chal.replay) lines.push(`<span class="ok">${t('logReplaying', chal.replay.idx + 1, chal.log.length)}</span>`);
+  document.getElementById('chalStatus').innerHTML = lines.join('<br>');
+}
+
+/* кадр режима: воспроизведение, физика текущего задания, обновление панели */
+function challengeTick(now) {
+  const dt = chal.lastNow ? Math.max(0, Math.min(0.05, (now - chal.lastNow) / 1000)) : 0;
+  chal.lastNow = now;
+  if (chal.replay) replayTick(now);
+  armRoot.updateWorldMatrix(true, true);
+  tickHold(dt);
+  if (chal.task === 0) tickTask1();
+  else if (chal.task === 1) tickDrill();
+  else tickMill();
+  if (now - chal.lastHud > 200) { chal.lastHud = now; renderChalStatus(); }
+}
+
+btnChal.onclick = () => (chal ? stopChallenge() : startChallenge());
+document.getElementById('chalClose').onclick = stopChallenge;
+
+/* ---- Запись действий: журнал, отмена последнего, воспроизведение ---- */
+
+/* Действие: {kind:'param', i, type, key, from, to} — слайдер (одна запись на перетаскивание);
+   {kind:'add', i, comp} / {kind:'del', i, comp} — кнопки; {kind:'config', from, to} — массовые
+   изменения (генерация, новый проект, Undo, Apply); {kind:'task', from, to} / {kind:'reset', task}. */
+function recordAction(a) {
+  if (!chal || chal.replay) return;
+  if (a.kind === 'param' && a.from === a.to) return;
+  if (a.kind === 'config' && JSON.stringify(a.from) === JSON.stringify(a.to)) return;
+  chal.log.push(a);
+  renderLog();
+}
+
+/* оборачивает массовое изменение цепочки: снимок до и после — одна запись */
+function withLog(fn) {
+  const before = chal && !chal.replay ? cleanConfig() : null;
+  fn();
+  if (before) recordAction({ kind: 'config', from: before, to: cleanConfig() });
+}
+
+function syncSlider(c, key) {
+  const s = c._sliders?.[key], p = TYPES[c.type].params.find(q => q.key === key);
+  if (s && p) { s.slider.value = c[key]; s.val.textContent = quantParam(c[key], p); }
+}
+
+/* применение действия вперёд (воспроизведение) или назад (отмена) */
+function applyAction(a, reverse) {
+  if (a.kind === 'param') {
+    const c = components[a.i];
+    if (!c || c.type !== a.type) return;
+    c[a.key] = reverse ? a.from : a.to;
+    syncSlider(c, a.key);
+    applyParam(c);
+  } else if (a.kind === 'add') {
+    if (reverse) components.splice(a.i, 1); else components.splice(a.i, 0, clone(a.comp));
+    buildArm(); renderPanel();
+  } else if (a.kind === 'del') {
+    if (reverse) components.splice(a.i, 0, clone(a.comp)); else components.splice(a.i, 1);
+    buildArm(); renderPanel();
+  } else if (a.kind === 'config') {
+    components = clone(reverse ? a.from : a.to);
+    buildArm(); renderPanel();
+  } else if (a.kind === 'task') {
+    setTask(reverse ? a.from : a.to);
+  } else if (a.kind === 'reset') {
+    setTask(a.task);
+  }
+}
+
+function undoLastAction() {
+  if (!chal || chal.replay || !chal.log.length) return;
+  applyAction(chal.log.pop(), true);
+  renderLog();
+}
+
+function actionLabel(a) {
+  if (a.kind === 'param') {
+    const ty = TYPES[a.type], p = ty.params.find(q => q.key === a.key);
+    return `${iconSVG(a.type, 14)} ${t('logParam', tr(ty.label), a.i + 1, tr(p.label), quantParam(a.from, p), quantParam(a.to, p))}`;
+  }
+  if (a.kind === 'add') return `${iconSVG(a.comp.type, 14)} ${t('logAdd', tr(TYPES[a.comp.type].label))}`;
+  if (a.kind === 'del') return `${iconSVG(a.comp.type, 14)} ${t('logDel', tr(TYPES[a.comp.type].label), a.i + 1)}`;
+  if (a.kind === 'config') return `🔧 ${t('logConfig', a.to.length)}`;
+  if (a.kind === 'task') return `🏁 ${t('logTask', a.to + 1)}`;
+  return `↺ ${t('logReset', a.task + 1)}`;
+}
+
+function renderLog() {
+  if (!chal) return;
+  document.getElementById('actTitle').textContent = t('logTitle');
+  const bUndo = document.getElementById('btnActUndo'), bPlay = document.getElementById('btnActReplay');
+  bUndo.textContent = t('logUndo');
+  bUndo.disabled = !chal.log.length || !!chal.replay;
+  bPlay.textContent = t(chal.replay ? 'logStop' : 'logReplay');
+  bPlay.disabled = !chal.log.length;
+  document.getElementById('loopLbl').textContent = t('logLoop');
+  document.getElementById('actLoop').title = t('logLoopTip');
+  actList.innerHTML = '';
+  if (!chal.log.length) { actList.innerHTML = `<div id="actEmpty">${t('logEmpty')}</div>`; return; }
+  chal.log.forEach((a, i) => {
+    const row = document.createElement('div');
+    const r = chal.replay;
+    row.className = 'act' + (r && i === r.idx ? ' cur' : '') + (r && i < r.idx ? ' past' : '');
+    row.innerHTML = `<span class="act-n">${i + 1}</span><span class="act-txt">${actionLabel(a)}</span>`;
+    actList.appendChild(row);
+  });
+  const cur = actList.querySelector('.act.cur');
+  if (cur) cur.scrollIntoView({ block: 'nearest' }); else actList.scrollTop = actList.scrollHeight;
+}
+
+const chkLoop = document.getElementById('chkLoop');
+document.getElementById('btnActUndo').onclick = undoLastAction;
+document.getElementById('btnActReplay').onclick = () => (chal?.replay ? stopReplay() : startReplay());
+
+/* Воспроизведение: рука и задания возвращаются к состоянию на момент включения режима,
+   дальше действия применяются по очереди; слайдеры плавно едут от from к to, так что
+   захват, сверление и распил происходят заново по-настоящему. */
+/* возврат к исходному состоянию: рука на момент включения режима, первое задание */
+function replayReset() {
+  chal.done = [false, false, false];
+  components = clone(chal.startConfig);
+  buildArm();
+  renderPanel();
+  setTask(0);
+}
+
+function startReplay() {
+  if (!chal || chal.replay || !chal.log.length) return;
+  chal.replay = { idx: -1, until: 0, cur: null, t0: 0, dur: 0 }; // до replayReset: камера не трогается
+  document.body.classList.add('replaying');
+  replayReset();
+  renderLog();
+  renderChalHUD();
+}
+
+function stopReplay() {
+  if (!chal?.replay) return;
+  const a = chal.replay.cur;
+  chal.replay = null;
+  if (a) applyAction(a, false); // незавершённый шаг — довести до конца
+  document.body.classList.remove('replaying');
+  renderLog();
+  renderChalHUD();
+}
+
+function replayTick(now) {
+  const r = chal.replay;
+  if (r.cur) {
+    /* плавное движение слайдера */
+    const a = r.cur, c = components[a.i], k = Math.min(1, (now - r.t0) / r.dur);
+    if (c && c.type === a.type) {
+      c[a.key] = a.from + (a.to - a.from) * k;
+      syncSlider(c, a.key);
+      applyParam3D(c);
+    }
+    if (k < 1) return;
+    r.cur = null;
+    applyAction(a, false);
+    r.until = now + 250;
+    return;
+  }
+  if (now < r.until) return;
+  r.idx++;
+  if (r.idx >= chal.log.length) {
+    if (!chkLoop.checked) { stopReplay(); return; }
+    /* зацикленный повтор: всё сначала */
+    replayReset();
+    r.idx = -1; r.until = now + 800;
+    renderLog();
+    return;
+  }
+  const a = chal.log[r.idx];
+  renderLog();
+  if (a.kind === 'param' && a.type !== 'link' && a.type !== 'offset') {
+    const p = TYPES[a.type].params.find(q => q.key === a.key);
+    r.cur = a; r.t0 = now;
+    r.dur = 300 + 900 * Math.abs(a.to - a.from) / (p.max - p.min);
+  } else {
+    applyAction(a, false); // структурные шаги и длины звеньев — сразу
+    r.until = now + 500;
+  }
+}
+
 /* ================= Применение темы ================= */
 
 /* Обновляет сцену и состояние переключателя; рука перекрашивается пересборкой */
@@ -2788,7 +3740,7 @@ for (const b of document.querySelectorAll('#themeSw button')) {
 
 /* ================= Применение языка ================= */
 
-const TAB_STR = { components: 'tabParts', jsonarea: 'tabJson', urdfarea: 'tabUrdf', bom: 'tabBom' };
+const TAB_STR = { components: 'tabParts', jsonarea: 'tabJson', urdfarea: 'tabUrdf', actarea: 'tabLog', bom: 'tabBom' };
 
 /* Статические подписи + перерисовка кнопок добавления */
 function applyI18n() {
@@ -2830,6 +3782,9 @@ function applyI18n() {
   licLink.textContent = t('license');
   licLink.title = t('licenseTip');
   document.getElementById('btnHelp').title = t('helpTip');
+  btnChal.textContent = t('chalBtn');
+  btnChal.title = t('chalTip');
+  if (chal) { renderChalHUD(); renderLog(); }
   if (tutStep >= 0) showTutStep(); // renderAddRow пересоздал кнопки — вернуть подсветку
   document.getElementById('bomTitle').textContent = t('bomTitle');
   document.getElementById('bomNote').textContent = t('bomNote');
@@ -2874,6 +3829,7 @@ renderer.setAnimationLoop((now) => {
   for (const c of components) {
     if (c._spin) c._spin.rotation.y += (c.speed ?? 0) * 0.004;
   }
+  if (chal) challengeTick(now);
   controls.update();
   if (chkFit.checked) cameraAutoExpand();
   updateFog();
