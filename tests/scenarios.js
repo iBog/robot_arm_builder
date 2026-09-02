@@ -321,7 +321,13 @@ await (async () => { try {
     else expect(SHARE_BASE === location.origin + location.pathname.replace(/index\.html?$/i, '') && shareURL().startsWith(location.origin), 'http(s): ссылки ведут на адрес страницы ' + SHARE_BASE);
     const n0 = components.length; startChallenge();
     expect(components.length === n0 && components.filter(c => 'angle' in c).every(c => c.angle === 0), 'режим заданий берёт текущую руку, только сбрасывает позу');
-    stopChallenge();
+    /* сворачивание окна задания в кнопку */
+    expect(!chalPanel.hidden && btnChal.textContent === '🏆 1/3', 'окно открыто, на кнопке прогресс');
+    btnChal.click(); expect(chalPanel.hidden && !!chal && btnChal.classList.contains('collapsed'), 'клик по кнопке сворачивает окно, режим не выключается');
+    btnChal.click(); expect(!chalPanel.hidden, 'повторный клик разворачивает');
+    btnChal.click(); completeTask(); expect(!chalPanel.hidden && btnChal.textContent === '🏆 1/3 ✓', 'выполнение задания разворачивает окно, на кнопке галочка');
+    document.getElementById('chalClose').click(); expect(chal === null && btnChal.textContent === t('chalBtn'), '✕ выходит из режима, кнопка обычная');
+    startChallenge(); stopChallenge();
     setLang(lang === 'en' ? 'ru' : 'en'); setTheme(theme === 'dark' ? 'light' : 'dark');
     expect(new RegExp(`lang=${lang}&theme=${theme}$`).test(shareURL()) && structShareURL().includes(`lang=${lang}`), 'после переключения язык и тема в обеих ссылках');
   }

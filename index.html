@@ -120,6 +120,7 @@
   }
   #btnChal:hover { border-color: var(--accent); }
   #btnChal.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  #btnChal.collapsed { color: var(--text); background: var(--overlay); } /* окно свёрнуто — кнопка спокойная */
   #chalPanel {
     position: absolute; left: 12px; bottom: 46px; z-index: 3;
     width: 320px; max-width: calc(100% - 24px); max-height: calc(100% - 120px);
@@ -769,6 +770,8 @@ const STR = {
   chalBtn:    { en: '🏆 Challenge',                   ru: '🏆 Задания' },
   chalTip:    { en: 'Challenge mode: three tasks for your arm',
                 ru: 'Режим заданий: три задачи для вашей руки' },
+  chalToggleTip: { en: 'Show or hide the task panel (exit — ✕ in its header)',
+                   ru: 'Свернуть или развернуть окно задания (выход — ✕ в его шапке)' },
   chalTitle:  { en: '🏆 Challenge',                   ru: '🏆 Задания' },
   chalExit:   { en: 'Exit challenge mode',            ru: 'Выйти из режима заданий' },
   chalTask1:  { en: 'Pick & place the cube',          ru: 'Перенести кубик' },
@@ -3348,6 +3351,22 @@ function checkGeomSpec() {
 let chal = null;
 const btnChal = document.getElementById('btnChal');
 const chalPanel = document.getElementById('chalPanel');
+/* Окно задания сворачивается в кнопку «🏆» (на телефоне оно закрывает весь 3D-вид):
+   при активном режиме кнопка прячет/показывает окно и несёт компактный прогресс
+   «🏆 2/3 ✓»; выход из режима — ✕ в шапке окна. Выполненное задание разворачивает
+   окно само, чтобы поздравление не потерялось. */
+let chalCollapsed = false;
+function setChalCollapsed(v) {
+  chalCollapsed = v;
+  chalPanel.hidden = v;
+  btnChal.classList.toggle('collapsed', v);
+  renderChalButton();
+}
+function renderChalButton() {
+  if (!chal) { btnChal.textContent = t('chalBtn'); btnChal.title = t('chalTip'); return; }
+  btnChal.textContent = `🏆 ${chal.task + 1}/3${chal.done[chal.task] ? ' ✓' : ''}`;
+  btnChal.title = t('chalToggleTip');
+}
 const actList = document.getElementById('actList');
 
 /* ---- общие утилиты ---- */
@@ -3996,7 +4015,7 @@ function startChallenge() {
            log: [], replay: null, startConfig: cleanConfig() };
   document.body.classList.add('challenge');
   btnChal.classList.add('on');
-  chalPanel.hidden = false;
+  setChalCollapsed(false);
   setTask(0);
   const active = document.querySelector('#tabs button.active')?.dataset.tab;
   if (active === 'jsonarea' || active === 'urdfarea') selectTab('actarea');
@@ -4010,8 +4029,9 @@ function stopChallenge() {
   chal = null;
   invalidate();
   document.body.classList.remove('challenge');
-  btnChal.classList.remove('on');
+  btnChal.classList.remove('on', 'collapsed');
   chalPanel.hidden = true;
+  renderChalButton();
   if (document.querySelector('#tabs button.active')?.dataset.tab === 'actarea') selectTab('components');
 }
 
@@ -4061,11 +4081,13 @@ function resetTask() {
 function completeTask() {
   if (chal.done[chal.task]) return;
   chal.done[chal.task] = true;
+  if (chalCollapsed) setChalCollapsed(false); // поздравление не должно потеряться
   renderChalHUD();
 }
 
 function renderChalHUD() {
   if (!chal) return;
+  renderChalButton();
   document.getElementById('chalTitle').textContent = t('chalTitle');
   document.getElementById('chalClose').title = t('chalExit');
   const tasks = document.getElementById('chalTasks');
@@ -4142,7 +4164,7 @@ function challengeTick(now) {
   if (now - chal.lastHud > 200) { chal.lastHud = now; renderChalStatus(); }
 }
 
-btnChal.onclick = () => (chal ? stopChallenge() : startChallenge());
+btnChal.onclick = () => (chal ? setChalCollapsed(!chalCollapsed) : startChallenge());
 document.getElementById('chalClose').onclick = stopChallenge;
 
 /* ---- Запись действий: журнал, отмена последнего, воспроизведение ---- */
@@ -4390,8 +4412,7 @@ function applyI18n() {
   licLink.textContent = t('license');
   licLink.title = t('licenseTip');
   document.getElementById('btnHelp').title = t('helpTip');
-  btnChal.textContent = t('chalBtn');
-  btnChal.title = t('chalTip');
+  renderChalButton();
   if (chal) { renderChalHUD(); renderLog(); }
   if (tutStep >= 0) showTutStep(); // renderAddRow пересоздал кнопки — вернуть подсветку
   document.getElementById('bomTitle').textContent = t('bomTitle');
