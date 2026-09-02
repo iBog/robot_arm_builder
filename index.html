@@ -674,9 +674,9 @@ const STR = {
   applied:    { en: '✓ applied',                      ru: '✓ применено' },
   copied:     { en: '✓ copied',                       ru: '✓ скопировано' },
   share:      { en: '🔗 Share',                       ru: '🔗 Ссылка' },
-  shareTip:   { en: 'Copy a link that recreates this arm. Long press — a short link with the structure only (default poses)',
-                ru: 'Скопировать ссылку, воссоздающую эту руку. Долгое нажатие — короткая ссылка только с составом (позы по умолчанию)' },
-  shareCopied:{ en: '✓ link copied',                  ru: '✓ ссылка скопирована' },
+  shareTip:   { en: 'Copy a short link with the arm structure (default poses and sizes). Long press — a full link with the exact poses and sizes',
+                ru: 'Скопировать короткую ссылку с составом руки (позы и размеры по умолчанию). Долгое нажатие — полная ссылка с точными позами и размерами' },
+  shareCopied:{ en: '✓ full link copied',             ru: '✓ полная ссылка скопирована' },
   shortCopied:{ en: '✓ short link copied',            ru: '✓ короткая ссылка скопирована' },
   undo:       { en: '↩️ Undo',                        ru: '↩️ Отмена' },
   undoTip:    { en: 'Revert the last change to the arm',
@@ -817,7 +817,8 @@ function urlParam(k) {
 }
 
 const urlLang = (urlParam('lang') || '').toLowerCase().slice(0, 2);
-let lang = LANGS.includes(urlLang) ? urlLang
+let langChosen = LANGS.includes(urlLang); // язык задан явно — уйдёт и в ссылку «Share»
+let lang = langChosen ? urlLang
   : LANGS.includes(storedLang()) ? storedLang()
   : (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
 
@@ -854,7 +855,8 @@ function storedTheme() {
   try { return localStorage.getItem(THEME_KEY); } catch { return null; }
 }
 const urlTheme = (urlParam('theme') || '').toLowerCase();
-let theme = THEMES.includes(urlTheme) ? urlTheme : THEMES.includes(storedTheme()) ? storedTheme() : 'light';
+let themeChosen = THEMES.includes(urlTheme); // тема задана явно — уйдёт и в ссылку «Share»
+let theme = themeChosen ? urlTheme : THEMES.includes(storedTheme()) ? storedTheme() : 'light';
 /* SCN — цвета сцены текущей темы; перечитывается в applyTheme() */
 let SCN = SCENE_THEME[theme];
 document.documentElement.dataset.theme = theme; // до отрисовки, чтобы не мигало
@@ -2353,15 +2355,22 @@ function groupCode(code) {
 
 /* ---- Ссылка на текущую конфигурацию: цифровой код в параметре ?c= ---- */
 
+/* Язык и тема попадают в ссылку, если заданы явно: пришли из ссылки при открытии
+   или переключены в процессе работы (флаги langChosen/themeChosen). Иначе
+   получатель откроет страницу со своими настройками. */
+function shareExtras() {
+  return (langChosen ? `&lang=${lang}` : '') + (themeChosen ? `&theme=${theme}` : '');
+}
 function shareURL() {
-  return `${SHARE_BASE}?c=${groupCode(encodeArmCode())}`;
+  return `${SHARE_BASE}?c=${groupCode(encodeArmCode())}${shareExtras()}`;
 }
 function structShareURL() {
-  return `${SHARE_BASE}?s=${groupCode(encodeStructCode())}`;
+  return `${SHARE_BASE}?s=${groupCode(encodeStructCode())}${shareExtras()}`;
 }
 
-/* Клик — полная ссылка (?c=), долгое нажатие (≥600 мс) — короткая (?s=,
-   только состав, позы по умолчанию). Обе сразу уходят в буфер обмена. */
+/* Клик — короткая ссылка (?s=, только состав, позы по умолчанию: её легко
+   запомнить и продиктовать), долгое нажатие (≥600 мс) — полная (?c=, с позами
+   и длинами). Обе сразу уходят в буфер обмена. */
 const btnShare = document.getElementById('btnShare');
 const LONG_PRESS_MS = 600;
 let sharePressTimer = null;
@@ -2379,12 +2388,12 @@ async function copyShare(struct) {
 
 btnShare.onclick = () => {
   if (shareLongFired) { shareLongFired = false; return; } // клик после долгого нажатия
-  copyShare(false);
+  copyShare(true);
 };
 btnShare.addEventListener('pointerdown', () => {
   shareLongFired = false;
   clearTimeout(sharePressTimer);
-  sharePressTimer = setTimeout(() => { shareLongFired = true; copyShare(true); }, LONG_PRESS_MS);
+  sharePressTimer = setTimeout(() => { shareLongFired = true; copyShare(false); }, LONG_PRESS_MS);
 });
 for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
   btnShare.addEventListener(ev, () => clearTimeout(sharePressTimer));
@@ -3986,6 +3995,7 @@ function applyTheme() {
 function setTheme(th) {
   if (!THEMES.includes(th) || th === theme) return;
   theme = th;
+  themeChosen = true;
   try { localStorage.setItem(THEME_KEY, th); } catch { /* file:// без хранилища */ }
   applyTheme();
   buildArm(); // цвета деталей берутся из SCN при сборке
@@ -4055,6 +4065,7 @@ function applyI18n() {
 function setLang(l) {
   if (!LANGS.includes(l) || l === lang) return;
   lang = l;
+  langChosen = true;
   try { localStorage.setItem(LANG_KEY, l); } catch { /* file:// без хранилища */ }
   applyI18n();
   renderPanel();
