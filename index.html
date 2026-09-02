@@ -375,6 +375,7 @@
   .ctrl label { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
   .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
   .ctrl .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--accent); }
+  .ctrl.locked { opacity: .55; } /* габарит зафиксирован: дальше уже есть компоненты */
   #empty { color: var(--muted); text-align: center; padding: 24px 10px; font-size: 13px; }
 
   /* ---- BOM: таблица закупки ---- */
@@ -662,6 +663,8 @@ const STR = {
   zoneTip:    { en: 'Motion zone — show/hide the dashed range',
                 ru: 'Зона движения — вкл/выкл пунктирную область' },
   remove:     { en: 'Remove component',               ru: 'Удалить компонент' },
+  lockedTip:  { en: 'Size is fixed: the next component is already attached. Remove the components above it to change it.',
+                ru: 'Габарит зафиксирован: дальше уже добавлен следующий компонент. Чтобы изменить, удалите компоненты после него.' },
   jsonTitle:  { en: 'JSON configuration',             ru: 'Конфигурация JSON' },
   urdfTitle:  { en: 'URDF description',               ru: 'Описание URDF' },
   save:       { en: 'Download',                       ru: 'Скачать' },
@@ -900,7 +903,12 @@ const TYPES = {
     icon: '🔭',
     label: { en: 'Prismatic', ru: 'Телескоп' },
     color: 0x4dd9cf,
-    params: [{ key: 'ext', label: { en: 'Extension', ru: 'Выдвижение' }, min: 0, max: 1.2, step: 0.05, def: 0.4 }],
+    /* length — габарит корпуса (build: только при сборке), ext — выдвижение штока,
+       не дальше длины корпуса (maxOf: 'length') */
+    params: [
+      { key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.3, max: 2, step: 0.05, def: 0.7, build: true },
+      { key: 'ext', label: { en: 'Extension', ru: 'Выдвижение' }, min: 0, max: 2, step: 0.05, def: 0.4, maxOf: 'length' },
+    ],
   },
   /* --- структура --- */
   link: {
@@ -908,14 +916,14 @@ const TYPES = {
     icon: '📏',
     label: { en: 'Link', ru: 'Звено' },
     color: 0x9aa7b8,
-    params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.3, max: 3, step: 0.05, def: 1 }],
+    params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.3, max: 3, step: 0.05, def: 1, build: true }],
   },
   offset: {
     code: 7,
     icon: '↪️',
     label: { en: 'Offset', ru: 'Кронштейн' },
     color: 0xb8a58f,
-    params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.2, max: 1.5, step: 0.05, def: 0.5 }],
+    params: [{ key: 'length', label: { en: 'Length', ru: 'Длина' }, min: 0.2, max: 1.5, step: 0.05, def: 0.5, build: true }],
   },
   /* --- наконечники (концевые эффекторы) --- */
   gripper: {
@@ -948,6 +956,11 @@ const TYPES = {
     params: [{ key: 'speed', label: { en: 'Speed, %', ru: 'Обороты, %' }, min: 0, max: 100, step: 1, def: 0 }],
   },
 };
+
+/* Параметры с build: true — габариты, задаются только при сборке: слайдер доступен,
+   пока компонент последний в цепочке; авто-анимация и позы их не трогают.
+   maxOf: 'key' — верхняя граница параметра ограничена другим параметром компонента. */
+function paramMax(c, p) { return p.maxOf ? Math.min(p.max, c[p.maxOf] ?? p.max) : p.max; }
 
 /* ---- SVG-иконки компонентов: единый линейный стиль ---- */
 const ICONS = {
@@ -1193,13 +1206,11 @@ function makeZone(c, holder, attachY) {
     zone.add(makeDashedLine(col, [new THREE.Vector3(xMax, y - 0.12, 0), new THREE.Vector3(xMax, y + 0.12, 0)]));
     zone.position.y = attachY;
   } else if (c.type === 'prismatic') {
-    /* пунктир хода штока телескопа */
-    const x = 0.3;
-    zone.add(makeDashedLine(col, [
-      new THREE.Vector3(x, 0.8 + p.min, 0), new THREE.Vector3(x, 0.8 + p.max, 0),
-    ]));
-    zone.add(makeDashedLine(col, [new THREE.Vector3(x - 0.1, 0.8 + p.min, 0), new THREE.Vector3(x + 0.1, 0.8 + p.min, 0)]));
-    zone.add(makeDashedLine(col, [new THREE.Vector3(x - 0.1, 0.8 + p.max, 0), new THREE.Vector3(x + 0.1, 0.8 + p.max, 0)]));
+    /* пунктир хода конца штока: от длины корпуса до удвоенной */
+    const x = 0.3, L = c.length ?? 0.7;
+    zone.add(makeDashedLine(col, [new THREE.Vector3(x, L, 0), new THREE.Vector3(x, 2 * L, 0)]));
+    zone.add(makeDashedLine(col, [new THREE.Vector3(x - 0.1, L, 0), new THREE.Vector3(x + 0.1, L, 0)]));
+    zone.add(makeDashedLine(col, [new THREE.Vector3(x - 0.1, 2 * L, 0), new THREE.Vector3(x + 0.1, 2 * L, 0)]));
   } else if (c.type === 'spherical') {
     /* два диапазона: диск yaw + вертикальный сектор pitch */
     const pPitch = t.params[0], pYaw = t.params[1];
@@ -1317,19 +1328,21 @@ function buildArm() {
 
     } else if (c.type === 'prismatic') {
       /* телескопический линейный привод: шток выдвигается вдоль оси */
-      const outer = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.7, 20), mat(t.color)));
-      outer.position.y = 0.35;
+      const L = c.length ?? 0.7;
+      const outer = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, L, 20), mat(t.color)));
+      outer.position.y = L / 2;
       pivot.add(outer);
+      /* шток той же длины: втянутый прячется в корпусе, выдвигается не дальше него */
       const rod = new THREE.Group();
-      const rodMesh = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.8, 16), mat(SCN.metal)));
-      rodMesh.position.y = 0.4;
+      const rodMesh = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, L, 16), mat(SCN.metal)));
+      rodMesh.position.y = L / 2;
       rod.add(rodMesh);
-      rod.position.y = c.ext ?? 0.4;
+      rod.position.y = Math.min(c.ext ?? 0.4, L);
       pivot.add(rod);
       c._rod = rod;
       makeZone(c, pivot, 0);
       parent = rod;
-      attachY = 0.8;
+      attachY = L;
 
     } else if (c.type === 'spherical') {
       /* шаровой шарнир: два вращения (yaw + pitch) в одном узле */
@@ -1459,7 +1472,9 @@ function applySuction(c) {
 
 /* Быстрое применение параметра без пересборки сцены;
    возвращает false, если нужна полная пересборка (link/offset) */
-function applyParam3D(c) {
+function applyParam3D(c, key) {
+  /* габариты (build) меняют геометрию цепочки — нужна пересборка */
+  if (key && TYPES[c.type].params.find(p => p.key === key)?.build) return false;
   if (c.type === 'yaw' || c.type === 'roll') {
     pivots[components.indexOf(c)].rotation.y = THREE.MathUtils.degToRad(c.angle);
   } else if (c.type === 'pitch') {
@@ -1467,7 +1482,7 @@ function applyParam3D(c) {
   } else if (c.type === 'gripper') {
     applyGripper(c);
   } else if (c.type === 'prismatic') {
-    c._rod.position.y = c.ext;
+    c._rod.position.y = Math.min(c.ext, c.length ?? c.ext);
   } else if (c.type === 'spherical') {
     c._g1.rotation.y = THREE.MathUtils.degToRad(c.yaw ?? 0);
     c._g2.rotation.x = THREE.MathUtils.degToRad(c.pitch ?? 0);
@@ -1482,8 +1497,8 @@ function applyParam3D(c) {
   return true;
 }
 
-function applyParam(c) {
-  if (!applyParam3D(c)) { buildArm(); return; }
+function applyParam(c, key) {
+  if (!applyParam3D(c, key)) { buildArm(); return; }
   updateJSONView();
   updateURDFView(); // в URDF от позы зависит только комментарий-шапка
 }
@@ -1574,11 +1589,18 @@ function renderPanel() {
       label.textContent = tr(p.label);
       const slider = document.createElement('input');
       slider.type = 'range';
-      slider.min = p.min; slider.max = p.max; slider.step = p.step;
+      slider.min = p.min; slider.max = paramMax(c, p); slider.step = p.step;
       slider.value = c[p.key] ?? p.def;
       const val = document.createElement('span');
       val.className = 'val';
       val.textContent = slider.value;
+      /* габарит настраивается, только пока компонент последний в цепочке */
+      if (p.build && i !== components.length - 1) {
+        slider.disabled = true;
+        row.classList.add('locked');
+        row.title = t('lockedTip');
+        label.textContent = '🔒 ' + label.textContent;
+      }
       slider.oninput = () => {
         /* запись действий: одно перетаскивание слайдера — одна запись (from фиксируется в начале) */
         if (chal && !chal.replay && c._actFrom?.[p.key] === undefined) {
@@ -1587,6 +1609,12 @@ function renderPanel() {
         const v = setParamChecked(c, p.key, parseFloat(slider.value));
         if (v !== parseFloat(slider.value)) slider.value = v; // упёрлись в пол
         val.textContent = quantParam(v, p);
+        /* зависимые параметры (ext ≤ length): подтянуть диапазон слайдера */
+        for (const q of ty.params) {
+          if (q.maxOf !== p.key) continue;
+          const s = c._sliders?.[q.key];
+          if (s) { s.slider.max = paramMax(c, q); s.slider.value = c[q.key]; s.val.textContent = quantParam(c[q.key], q); }
+        }
       };
       slider.onchange = () => {
         const from = c._actFrom?.[p.key];
@@ -1708,7 +1736,8 @@ function generateArm() {
       c.push({ type: 'pitch', angle: randi(-70, 70) });
       c.push({ type: 'link', length: randLen(0.6, 1.6) });
     } else if (r < 0.65) {
-      c.push({ type: 'prismatic', ext: randLen(0.1, 1.1) });
+      const L = randLen(0.5, 1.2);
+      c.push({ type: 'prismatic', length: L, ext: randLen(0, L) });
     } else if (r < 0.78) {
       c.push({ type: 'spherical', pitch: randi(-45, 45), yaw: randi(-90, 90) });
       c.push({ type: 'link', length: randLen(0.5, 1.2) });
@@ -2062,6 +2091,7 @@ function validateConfig(data) {
       if (c[p.key] === undefined) c[p.key] = p.def;
       c[p.key] = Math.min(p.max, Math.max(p.min, +c[p.key] || 0));
     }
+    for (const p of TYPES[c.type].params) c[p.key] = Math.min(c[p.key], paramMax(c, p)); // ext ≤ length
   }
   return data;
 }
@@ -2116,9 +2146,18 @@ document.getElementById('btnCopy').onclick = async () => {
    (группы 4227-8474-... для удобной диктовки) и отсекаются перед разбором. */
 
 /* Версии формата: 1 — типы одной цифрой (коды 0–9), 2 — типы двумя цифрами
-   (00–99, для новых типов с кодами 10+). Энкодер выбирает минимально
-   достаточную версию, декодер читает обе. */
-const CODE_VERSIONS = { 1: 1, 2: 2 }; // версия → ширина кода типа в цифрах
+   (00–99, для новых типов с кодами 10+), 3 — как 2, но у телескопа два параметра
+   (length и ext до 2). Энкодер выбирает минимально достаточную версию, декодер
+   читает все. */
+const CODE_VERSIONS = { 1: 1, 2: 2, 3: 2 }; // версия → ширина кода типа в цифрах
+
+/* параметры типов в старых версиях (заморожены): в v1/v2 у телескопа был только ext */
+const LEGACY_PARAMS = {
+  prismatic: [{ key: 'ext', min: 0, max: 1.2, step: 0.05, def: 0.4 }],
+};
+function codecParams(type, ver) {
+  return (ver < 3 && LEGACY_PARAMS[type]) || TYPES[type].params;
+}
 
 /* сколько цифр занимает параметр в коде */
 function paramDigits(p) {
@@ -2160,11 +2199,13 @@ function codeBody(str) {
   const d = String(str).replace(/\D+/g, '');
   /* минимум 2 цифры: версия + контрольная (пустое тело = пустая рука) */
   if (d.length < 2 || !CODE_VERSIONS[d[0]] || !dammValid(d)) return null;
-  return { tw: CODE_VERSIONS[d[0]], body: d.slice(1, -1) };
+  return { ver: +d[0], tw: CODE_VERSIONS[d[0]], body: d.slice(1, -1) };
 }
 
-/* минимально достаточная версия: 2 — только если есть типы с кодами 10+ */
+/* минимально достаточная версия: 3 — если есть телескоп (его параметры изменились),
+   2 — если есть типы с кодами 10+, иначе 1 */
 function codeVersionFor(list) {
+  if (list.some(c => LEGACY_PARAMS[c.type])) return '3';
   return list.some(c => TYPES[c.type].code > 9) ? '2' : '1';
 }
 
@@ -2196,7 +2237,7 @@ const CODE_SPEC = {
   2: 'roll|angle:-180:180:1:3',
   3: 'link|length:0.3:3:0.05:2',
   4: 'gripper|open:0:100:1:3',
-  5: 'prismatic|ext:0:1.2:0.05:2',
+  5: 'prismatic|length:0.3:2:0.05:2|ext:0:2:0.05:2', // с v3; в v1/v2 — см. CODE_SPEC_LEGACY
   6: 'spherical|pitch:-90:90:1:3|yaw:-180:180:1:3',
   7: 'offset|length:0.2:1.5:0.05:2',
   8: 'rail|pos:-2:2:0.05:2',
@@ -2206,8 +2247,15 @@ const CODE_SPEC = {
   11: 'mill|speed:0:100:1:3',
 };
 
+/* строки прежних версий, по которым декодируются старые ссылки (LEGACY_PARAMS) */
+const CODE_SPEC_LEGACY = { 5: 'prismatic|ext:0:1.2:0.05:2' };
+
 function checkCodeSpec() {
   const errors = [];
+  for (const [type, params] of Object.entries(LEGACY_PARAMS)) {
+    const actual = type + '|' + params.map(p => [p.key, p.min, p.max, p.step, paramDigits(p)].join(':')).join('|');
+    if (CODE_SPEC_LEGACY[TYPES[type].code] !== actual) errors.push(`legacy code ${TYPES[type].code}: "${actual}"`);
+  }
   for (const [type, ty] of Object.entries(TYPES)) {
     const actual = type + '|' + ty.params.map(p =>
       [p.key, p.min, p.max, p.step, paramDigits(p)].join(':')).join('|');
@@ -2229,7 +2277,7 @@ function checkCodeSpec() {
 function decodeArmCode(str) {
   const parsed = codeBody(str);
   if (parsed === null) return null;
-  const { tw, body: d } = parsed;
+  const { ver, tw, body: d } = parsed;
   const out = [];
   let i = 0;
   while (i < d.length) {
@@ -2238,7 +2286,7 @@ function decodeArmCode(str) {
     i += tw;
     if (!type) return null;
     const c = { type };
-    for (const p of TYPES[type].params) {
+    for (const p of codecParams(type, ver)) {
       const w = paramDigits(p);
       if (i + w > d.length) return null; // код оборван
       const idx = Math.min(parseInt(d.slice(i, i + w), 10),
@@ -2522,13 +2570,13 @@ function buildURDF() {
       org = uAdd(org, [0, -len, 0.28]);
 
     } else if (c.type === 'prismatic') {
-      const p = ty.params[0];
-      cur.shapes.push(uCyl(0.235, 0.7, uAdd(org, [0, 0, 0.35]), ty.color));
+      const p = ty.params.find(q => q.key === 'ext'), len = c.length ?? 0.7;
+      cur.shapes.push(uCyl(0.235, len, uAdd(org, [0, 0, len / 2]), ty.color));
       const L = joint(jn, 'prismatic', ln, org, [0, 0, 1],
-        p.min * URDF_SCALE, p.max * URDF_SCALE, 100, 0.5);
-      pose.push([jn, (c.ext ?? p.def) * URDF_SCALE]);
-      L.shapes.push(uCyl(0.13, 0.8, [0, 0, 0.4], URDF_NEUTRAL));
-      org = [0, 0, 0.8];
+        p.min * URDF_SCALE, paramMax(c, p) * URDF_SCALE, 100, 0.5);
+      pose.push([jn, Math.min(c.ext ?? p.def, len) * URDF_SCALE]);
+      L.shapes.push(uCyl(0.13, len, [0, 0, len / 2], URDF_NEUTRAL));
+      org = [0, 0, len];
 
     } else if (c.type === 'spherical') {
       /* шарового сустава в URDF нет: два revolute + промежуточное звено */
@@ -2747,46 +2795,51 @@ chkAnimate.onchange = () => {
   syncAnimToggle();
   if (chkAnimate.checked) {
     /* анимация качается вокруг текущих поз */
-    for (const c of components) delete c._animBase;
+    for (const c of components) delete c._anim;
   } else {
     /* при остановке — привести плавающие значения анимации к шагу слайдера */
     for (const c of components) {
-      if (c.type === 'link' || c.type === 'offset') continue;
       for (const p of TYPES[c.type].params) {
-        if (typeof c[p.key] !== 'number') continue;
-        c[p.key] = quantParam(c[p.key], p);
+        if (p.build || typeof c[p.key] !== 'number') continue;
+        applyParamChecked(c, p.key, quantParam(c[p.key], p)); // округление не должно увести под пол
         const s = c._sliders?.[p.key];
-        if (s) { s.slider.value = c[p.key]; s.val.textContent = c[p.key]; }
+        if (s) { s.slider.value = c[p.key]; s.val.textContent = quantParam(c[p.key], p); }
       }
-      applyParam3D(c);
     }
     updateJSONView(); // зафиксировать финальные значения
     updateURDFView();
   }
 };
 
+let lastAnimNow = 0;
 function animateArm(now) {
-  const t = now / 1000;
+  const dt = lastAnimNow ? Math.min(0.05, Math.max(0, (now - lastAnimNow) / 1000)) : 0;
+  lastAnimNow = now;
   components.forEach((c, i) => {
-    if (c.type === 'link' || c.type === 'offset') return; // статика: без пересборки
-    const params = TYPES[c.type].params;
-    if (!c._animBase) {
-      c._animBase = {};
-      for (const p of params) c._animBase[p.key] = c[p.key] ?? p.def;
+    const params = TYPES[c.type].params.filter(p => !p.build); // габариты не анимируются
+    if (!params.length) return;
+    if (!c._anim) {
+      /* качание вокруг текущих поз; фаза своя, чтобы у пола развернуться */
+      c._anim = {};
+      for (const p of params) c._anim[p.key] = { base: c[p.key] ?? p.def, phase: 0, dir: 1 };
     }
     for (const [j, p] of params.entries()) {
-      const base = c._animBase[p.key];
-      const amp = (p.max - p.min) * 0.25;
+      const a = c._anim[p.key], max = paramMax(c, p);
+      const amp = (max - p.min) * 0.25;
       const speed = 0.5 + ((i * 2 + j) % 4) * 0.22;
-      let v = base + amp * Math.sin(t * speed + i * 1.3 + j * 2.1);
-      v = Math.min(p.max, Math.max(p.min, v));
+      a.phase += speed * dt * a.dir;
+      const v = Math.min(max, Math.max(p.min, a.base + amp * Math.sin(a.phase + i * 1.3 + j * 2.1)));
       /* в 3D идёт точное значение — квантование до шага слайдера дёргало
          дальние звенья цепочки; округляем только подпись */
-      c[p.key] = v;
+      const acc = applyParamChecked(c, p.key, v);
+      if (acc !== v) {
+        /* упёрлись в пол: колебание продолжается от принятого значения в обратную сторону */
+        a.base += acc - v;
+        a.dir = -a.dir;
+      }
       const s = c._sliders?.[p.key];
-      if (s) { s.slider.value = v; s.val.textContent = quantParam(v, p); }
+      if (s) { s.slider.value = acc; s.val.textContent = quantParam(acc, p); }
     }
-    applyParam3D(c);
   });
   if (now - lastJsonSync > 300) { lastJsonSync = now; updateJSONView(); }
 }
@@ -3555,21 +3608,22 @@ function armMinY() {
   return minY;
 }
 
-/* Применяет параметр компонента; в режиме заданий значение принимается, только пока
-   рука не уходит под пол — иначе бинарным поиском берётся крайнее допустимое.
-   Возвращает принятое значение. */
-function setParamChecked(c, key, v) {
-  if (!chal) { c[key] = v; applyParam(c); return v; }
+/* Применяет параметр компонента; значение принимается, только пока рука не уходит
+   под пол — иначе бинарным поиском берётся крайнее допустимое. Возвращает принятое. */
+function applyParamChecked(c, key, v) {
   const old = c[key] ?? v;
-  const ok = x => { c[key] = x; if (!applyParam3D(c)) buildArm(); return armMinY() >= -0.005; };
-  let acc = v;
-  if (!ok(v)) {
-    let lo = old, hi = v;
-    for (let k = 0; k < 8; k++) { const mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; }
-    acc = lo;
-    ok(acc);
-  }
-  if (c.type !== 'link' && c.type !== 'offset') { updateJSONView(); updateURDFView(); }
+  const ok = x => { c[key] = x; if (!applyParam3D(c, key)) buildArm(); return armMinY() >= -0.005; };
+  if (ok(v)) return v;
+  let lo = old, hi = v;
+  for (let k = 0; k < 8; k++) { const mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; }
+  ok(lo);
+  return lo;
+}
+
+/* то же плюс обновление JSON/URDF (для build-параметров их обновляет buildArm) */
+function setParamChecked(c, key, v) {
+  const acc = applyParamChecked(c, key, v);
+  if (!TYPES[c.type].params.find(p => p.key === key)?.build) { updateJSONView(); updateURDFView(); }
   return acc;
 }
 
@@ -3581,7 +3635,7 @@ function startChallenge() {
   /* авто-анимация двигала бы руку сама — задания решает пользователь */
   chkAnimate.checked = false;
   syncAnimToggle();
-  for (const c of components) delete c._animBase;
+  for (const c of components) delete c._anim;
   chal = { task: 0, done: [false, false, false], lastNow: 0, lastHud: 0, held: null, holdables: [],
            log: [], replay: null, startConfig: cleanConfig() };
   document.body.classList.add('challenge');
@@ -3615,8 +3669,8 @@ function clearTask() {
    шпиндели выключены, схват раскрыт */
 function resetPose() {
   for (const c of components) {
-    if (c.type === 'link' || c.type === 'offset') continue;
     for (const p of TYPES[c.type].params) {
+      if (p.build) continue; // габариты — часть конструкции
       c[p.key] = c.type === 'gripper' ? p.max : Math.min(p.max, Math.max(p.min, 0));
     }
     delete c._actFrom;
@@ -3885,12 +3939,13 @@ function replayTick(now) {
   }
   const a = chal.log[r.idx];
   renderLog();
-  if (a.kind === 'param' && a.type !== 'link' && a.type !== 'offset') {
-    const p = TYPES[a.type].params.find(q => q.key === a.key);
+  const bp = a.kind === 'param' ? TYPES[a.type].params.find(q => q.key === a.key) : null;
+  if (bp && !bp.build) {
+    const p = bp;
     r.cur = a; r.t0 = now;
     r.dur = 300 + 900 * Math.abs(a.to - a.from) / (p.max - p.min);
   } else {
-    applyAction(a, false); // структурные шаги и длины звеньев — сразу
+    applyAction(a, false); // структурные шаги и габариты — сразу
     r.until = now + 500;
   }
 }
