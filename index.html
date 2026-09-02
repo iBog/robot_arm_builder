@@ -4,6 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Robo-Arm Builder</title>
+<meta id="metaDesc" name="description" content="Free 3D robot-arm configurator in the browser: joints, links, grippers and tools, motion zones, IK, URDF export and a parts list with prices.">
+<meta id="metaTheme" name="theme-color" content="#e9eaec">
+
+<!-- Обвязка публичной страницы. Канонический адрес — поддомен (он же в SHARE_FALLBACK):
+     копия на GitHub Pages ссылается сюда же и в индекс не лезет. У og:image адрес обязан быть
+     абсолютным — краулеры Reddit / HN / Telegram относительные пути не разворачивают.
+     Иконка — кроп из scr/icon-source.jpg на стальной плитке, вшит в data:-URI: страница остаётся одним
+     файлом и с file://; scr/icon-180.png — та же плитка для iOS-домашнего экрана. -->
+<link rel="canonical" href="https://robot.experimentalui.com/">
+<link rel="alternate" hreflang="en" href="https://robot.experimentalui.com/?lang=en">
+<link rel="alternate" hreflang="ru" href="https://robot.experimentalui.com/?lang=ru">
+<link rel="alternate" hreflang="x-default" href="https://robot.experimentalui.com/">
+<link rel="icon" type="image/png" sizes="64x64" href="data:image/png;base64,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">
+<link rel="apple-touch-icon" href="scr/icon-180.png">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Robo-Arm Builder">
+<meta property="og:title" content="Robo-Arm Builder — build a robot arm in your browser">
+<meta property="og:description" content="Assemble an arm from joints, links and tools, see its motion zones, drag the tip with IK — then take the parts list with prices and the URDF export. One HTML file, works on phones.">
+<meta property="og:url" content="https://robot.experimentalui.com/">
+<meta property="og:image" content="https://robot.experimentalui.com/scr/screenshot.png">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="1000">
+<meta property="og:image:alt" content="3D robot arm in the Robo-Arm Builder editor with its motion zones and the parts panel">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ru_RU">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Robo-Arm Builder — build a robot arm in your browser">
+<meta name="twitter:description" content="Assemble an arm from joints, links and tools, see its motion zones, drag the tip with IK — then take the parts list with prices and the URDF export.">
+<meta name="twitter:image" content="https://robot.experimentalui.com/scr/screenshot.png">
 <style>
   /* Светлая тема — по умолчанию; светло-серые тона 3D-редакторов (3ds Max) */
   :root {
@@ -636,7 +667,7 @@ const VERSION = '1.7.0';
 /* Адрес для ссылок кнопки «Ссылка» — тот, откуда открыта страница (свой домен,
    GitHub Pages, локальный сервер), чтобы шэринг не уводил трафик с нового адреса;
    завершающий index.html отбрасывается. При file:// — публичный адрес-запасной. */
-const SHARE_FALLBACK = 'https://ibog.github.io/robot_arm_builder/';
+const SHARE_FALLBACK = 'https://robot.experimentalui.com/';
 const SHARE_BASE = /^https?:$/.test(location.protocol)
   ? location.origin + location.pathname.replace(/index.html?$/i, '')
   : SHARE_FALLBACK;
@@ -647,6 +678,8 @@ const SHARE_BASE = /^https?:$/.test(location.protocol)
 const STR = {
   appTitle:   { en: '🦾 Robo-Arm Builder',            ru: '🦾 Конструктор робо-руки' },
   docTitle:   { en: 'Robo-Arm Builder',               ru: 'Конструктор робо-руки' },
+  metaDesc:   { en: 'Free 3D robot-arm configurator in the browser: joints, links, grippers and tools, motion zones, IK, URDF export and a parts list with prices.',
+                ru: 'Бесплатный 3D-конструктор робо-руки в браузере: суставы, звенья, схваты и инструменты, зоны движения, IK, экспорт URDF и список деталей с ценами.' },
   hint:       { en: 'LMB — rotate · wheel — zoom · RMB — pan',
                 ru: 'ЛКМ — вращение · колесо — зум · ПКМ — панорама' },
   animate:    { en: 'Animate',                        ru: 'Анимация' },
@@ -4345,6 +4378,8 @@ function replayTick(now) {
 function applyTheme() {
   SCN = SCENE_THEME[theme];
   document.documentElement.dataset.theme = theme;
+  document.getElementById('metaTheme').content =
+    getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   scene.background.setHex(SCN.bg);
   scene.fog.color.setHex(SCN.bg);
   ground.material.color.setHex(SCN.ground);
@@ -4384,6 +4419,7 @@ const TAB_STR = { components: 'tabParts', jsonarea: 'tabJson', urdfarea: 'tabUrd
 function applyI18n() {
   document.documentElement.lang = lang;
   document.title = t('docTitle');
+  document.getElementById('metaDesc').content = t('metaDesc');
   document.getElementById('appTitle').textContent = t('appTitle');
   document.getElementById('version').textContent = 'v' + VERSION;
   for (const b of document.querySelectorAll('#themeSw button')) {

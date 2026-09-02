@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ibog.github.io/robot_arm_builder/schema.json",
+  "$id": "https://robot.experimentalui.com/schema.json",
   "title": "Robo-Arm Builder arm configuration",
   "description": "Chain of components from the base to the arm tip, as shown in the JSON tab and accepted by \"Apply\" and the ?config= link parameter. Missing parameters take their defaults; values are clamped to their ranges.",
   "type": "array",
