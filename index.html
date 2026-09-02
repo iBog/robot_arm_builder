@@ -202,7 +202,7 @@
   #startHint.warn { border-color: var(--danger); }
   #startHint.warn::before { border-left-color: var(--danger); border-top-color: var(--danger); }
   /* ---- Подсказка шага обучения — стиль как у #startHint ---- */
-  #tutHint {
+  #tutHint, #ikHint {
     position: absolute; top: 58px; left: 12px; z-index: 3; /* ниже ряда кнопок #vpTools */
     max-width: 320px;
     background: var(--panel2); color: var(--text);
@@ -211,18 +211,22 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
     animation: hintIn .25s ease-out;
   }
-  #tutHint::before {
+  #ikHint { border-color: var(--danger); }
+  #ikHint[hidden] { display: none; }
+  #ikHint b { color: var(--danger); }
+  #tutHint::before, #ikHint::before {
     content: ''; position: absolute; top: -7px; left: 20px;
     width: 12px; height: 12px; background: var(--panel2);
     border-left: 1px solid var(--accent); border-top: 1px solid var(--accent);
     transform: rotate(45deg);
   }
   #tutHint .tut-step { color: var(--accent); font-weight: 700; }
-  #tutHint .tut-exit {
+  #ikHint::before { border-left-color: var(--danger); border-top-color: var(--danger); }
+  #tutHint .tut-exit, #ikHint .tut-exit {
     float: right; margin-left: 8px; cursor: pointer;
     color: var(--muted); font-weight: 700;
   }
-  #tutHint .tut-exit:hover { color: var(--danger); }
+  #tutHint .tut-exit:hover, #ikHint .tut-exit:hover { color: var(--danger); }
   /* подсвеченная кнопка-цель текущего шага */
   #addRow button.tut-target {
     /* !important: перебиваем инлайновый цвет рамки, заданный кнопке по типу */
@@ -483,7 +487,7 @@
     #hint { display: none; }
     #animToggle, #btnShare { padding: 6px 10px; font-size: 12.5px; }
     #startHint { left: 12px; right: 12px; max-width: none; }
-    #tutHint { top: 96px; left: 12px; right: 12px; max-width: none; } /* под двумя рядами кнопок */
+    #tutHint, #ikHint { top: 96px; left: 12px; right: 12px; max-width: none; } /* под двумя рядами кнопок */
     #chalPanel { right: 12px; width: auto; max-height: 45%; font-size: 12px; }
     /* свёрнутая панель на мобильном: колонка одна, снизу только кнопки */
     body.panelCollapsed { grid-template-columns: minmax(0, 1fr); }
@@ -533,6 +537,7 @@
     <button id="btnUndo" hidden></button>
   </div>
   <div id="tutHint" hidden></div>
+  <div id="ikHint" hidden></div>
   <div id="camTools">
     <label id="fitToggle"><input type="checkbox" id="chkFit" checked><span id="fitLbl">Fit</span></label>
     <button id="btnPanel">▤</button>
@@ -687,6 +692,9 @@ const STR = {
   ik:         { en: '🎯 IK',                          ru: '🎯 ИК' },
   ikTip:      { en: 'Inverse kinematics: drag the target at the arm tip, the joints follow',
                 ru: 'Обратная кинематика: тяните мишень на конце руки — суставы подберутся сами' },
+  ikMiss:     { en: d => `🎯 <b>Target out of reach by ${d} m.</b> This arm can't get there: rebuild it — a longer link, another joint or a telescope — and the target will be tried again automatically. Drag the red target to move it.`,
+                ru: d => `🎯 <b>До цели не хватает ${d} м.</b> Этой руке туда не дотянуться: перестройте её — длиннее звено, ещё сустав или телескоп — и цель проверится заново сама. Красную мишень можно перетащить.` },
+  ikMissTip:  { en: 'Dismiss', ru: 'Скрыть' },
   undo:       { en: '↩️ Undo',                        ru: '↩️ Отмена' },
   undoTip:    { en: 'Revert the last change to the arm',
                 ru: 'Откатить последнее изменение руки' },
@@ -1528,6 +1536,7 @@ function buildArm() {
     }
   }
   tipNode = parent; tipY = attachY;
+  if (ikMiss) queueMicrotask(ikRetry); // рука перестроена — цель проверить заново (после renderPanel)
   updateJSONView();
   updateURDFView();
   updateBOM();
@@ -2987,6 +2996,55 @@ scene.add(ikGizmo);
 const ikRay = new THREE.Raycaster(), ikNDC = new THREE.Vector2(), ikPlane = new THREE.Plane();
 const _ikTip = new THREE.Vector3(), _ikTarget = new THREE.Vector3(), _ikDir = new THREE.Vector3();
 let ikDrag = null; // { start: [{c, p, i, v0}] } во время перетаскивания
+/* Недостижимая цель: мишень краснеет и остаётся там, куда её поставили, пунктир
+   тянется от конца руки, подсказка называет недостающее расстояние. Рука может
+   оказаться непригодной — тогда пользователь перестраивает её; buildArm() зовёт
+   ikRetry(), и цель принимается, как только становится достижимой. */
+const IK_TOL = 0.03;
+const IK_COLOR = { ok: 0x4da3ff, miss: 0xff5c5c };
+let ikMiss = null; // { target: Vector3 }
+const ikHint = document.getElementById('ikHint');
+const ikLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineDashedMaterial({ color: IK_COLOR.miss, dashSize: 0.06, gapSize: 0.05, depthTest: false }));
+ikLine.renderOrder = 9;
+ikLine.visible = false;
+scene.add(ikLine);
+
+function ikSetMiss(target, residual) {
+  ikMiss = { target: target.clone() };
+  ikGizmo.material.color.setHex(IK_COLOR.miss);
+  ikGizmo.position.copy(target);
+  ikLine.visible = true;
+  ikHint.innerHTML = `<span class="tut-exit" title="${t('ikMissTip')}">✕</span>${t('ikMiss', residual.toFixed(2))}`;
+  ikHint.querySelector('.tut-exit').onclick = ikClearMiss;
+  ikHint.hidden = false;
+  invalidate();
+}
+function ikClearMiss() {
+  ikMiss = null;
+  ikGizmo.material.color.setHex(IK_COLOR.ok);
+  ikLine.visible = false;
+  ikHint.hidden = true;
+  invalidate();
+}
+/* после перестройки руки — попробовать цель снова */
+function ikRetry() {
+  if (!ikMiss || !ikOn) return;
+  const target = ikMiss.target;
+  const res = ikSolve(target);
+  for (const x of ikParams()) syncSlider(x.c, x.p.key);
+  if (res <= IK_TOL) ikClearMiss(); else ikSetMiss(target, res);
+  updateJSONView();
+}
+/* пунктир от конца руки к цели — обновляется в кадре */
+function ikUpdateLine() {
+  const pos = ikLine.geometry.attributes.position;
+  armTip(_ikTip);
+  pos.setXYZ(0, _ikTip.x, _ikTip.y, _ikTip.z);
+  pos.setXYZ(1, ikGizmo.position.x, ikGizmo.position.y, ikGizmo.position.z);
+  pos.needsUpdate = true;
+  ikLine.computeLineDistances();
+}
 
 function ikParams() {
   const out = [];
@@ -3039,7 +3097,7 @@ function setIK(on) {
   ikOn = on;
   btnIK.classList.toggle('on', on);
   ikGizmo.visible = on;
-  if (on) armTip(ikGizmo.position);
+  if (on) armTip(ikGizmo.position); else ikClearMiss();
   invalidate();
 }
 btnIK.onclick = () => setIK(!ikOn);
@@ -3064,6 +3122,7 @@ renderer.domElement.addEventListener('pointerdown', e => {
   camera.getWorldDirection(_ikDir);
   ikPlane.setFromNormalAndCoplanarPoint(_ikDir, ikGizmo.position);
   ikDrag = { start: ikParams().map(x => ({ ...x, v0: x.c[x.p.key] ?? x.p.def })) };
+  ikHint.hidden = true; // промах переоценим по отпусканию
   renderer.domElement.style.cursor = 'grabbing';
 });
 renderer.domElement.addEventListener('pointermove', e => {
@@ -3071,7 +3130,10 @@ renderer.domElement.addEventListener('pointermove', e => {
   if (!ikDrag) { renderer.domElement.style.cursor = ikHit(e) ? 'grab' : ''; return; }
   ikPointerNDC(e);
   if (!ikRay.ray.intersectPlane(ikPlane, _ikTarget)) return;
-  ikSolve(_ikTarget);
+  ikGizmo.position.copy(_ikTarget); // мишень там, куда тянут; рука догоняет, насколько может
+  const res = ikSolve(_ikTarget);
+  ikGizmo.material.color.setHex(res > IK_TOL ? IK_COLOR.miss : IK_COLOR.ok);
+  ikLine.visible = res > IK_TOL;
   updateJSONView();
 });
 function ikDragEnd(e) {
@@ -3089,6 +3151,9 @@ function ikDragEnd(e) {
   }
   updateJSONView();
   updateURDFView();
+  /* достали или нет: промах остаётся на экране, пока руку не перестроят */
+  const res = armTip(_ikTip).distanceTo(ikGizmo.position);
+  if (res > IK_TOL) ikSetMiss(ikGizmo.position, res); else ikClearMiss();
 }
 renderer.domElement.addEventListener('pointerup', ikDragEnd);
 renderer.domElement.addEventListener('pointercancel', ikDragEnd);
@@ -4372,7 +4437,7 @@ if (urlParam('debug') !== null) {
     setParam(i, key, v) { const c = components[i]; const acc = setParamChecked(c, key, v); syncSlider(c, key); return acc; },
     tip: () => armTip().toArray(),
     minY: () => armMinY(),
-    ik: { on: setIK, solve: (x, y, z) => ikSolve(new THREE.Vector3(x, y, z)) },
+    ik: { on: setIK, solve: (x, y, z) => ikSolve(new THREE.Vector3(x, y, z)), get miss() { return ikMiss?.target.toArray() ?? null; } },
     tick(now) { if (chal) challengeTick(now); },
     state: () => ({
       version: VERSION, lang, theme, components: cleanConfig(), tip: armTip().toArray(), minY: armMinY(),
@@ -4406,7 +4471,8 @@ renderer.setAnimationLoop((now) => {
   if (chkFit.checked && cameraAutoExpand()) invalidate();
   if (!live && !moved && renderPending <= 0) return; // ничего не изменилось — кадр пропускаем
   if (renderPending > 0) renderPending--;
-  if (ikOn && !ikDrag) armTip(ikGizmo.position); // мишень следует за концом руки
+  if (ikOn && !ikDrag && !ikMiss) armTip(ikGizmo.position); // мишень следует за концом руки
+  if (ikLine.visible) ikUpdateLine();
   updateFog();
   renderer.render(scene, camera);
 });

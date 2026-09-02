@@ -76,7 +76,7 @@ const GRIP_ARM = [{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type
 const held = () => !!chal.held;
 const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(16); };
 
-try {
+await (async () => { try {
   /* ---------- золотой снимок геометрии и URDF: ловит регрессии в размерах деталей ---------- */
   if (SCEN === 'golden') {
     const ARMS = [
@@ -368,7 +368,7 @@ try {
     expect(api.share.decode(api.share.encode(cfg)).length === 4 && api.share.short().includes('?s='), 'share.encode/decode/short');
   }
   /* ---------- обратная кинематика: солвер и перетаскивание мишени ---------- */
-  if (SCEN === 'ik') {
+  if (SCEN === 'ik') await (async () => {
     setArm([{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 1.0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 0.8 }, { type: 'roll', angle: 0 }, { type: 'gripper', open: 50 }]);
     const tgt = new THREE.Vector3(1.4, 1.6, 1.2); // в пределах ±120° наклона
     const res = ikSolve(tgt);
@@ -394,7 +394,25 @@ try {
     expect(!ikDrag && controls.enabled && JSON.stringify(before) !== JSON.stringify(after), 'после отпускания камера свободна, поза изменилась');
     expect(chal.log.length > 0 && chal.log.every(a => a.kind === 'param'), `в журнал записаны параметры: ${chal.log.length}`);
     ev('pointerdown', 5, 5); expect(!ikDrag, 'нажатие мимо мишени ничего не начинает');
-    stopChallenge(); setIK(false);
-  }
+    stopChallenge();
+    /* недостижимая цель: мишень краснеет и остаётся, подсказка с расстоянием; перестройка руки принимает цель */
+    setArm([{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 0.5 }, { type: 'gripper', open: 50 }]);
+    renderer.render(scene, camera);
+    const s0 = toClient(ikGizmo.position);
+    ev('pointerdown', s0.x, s0.y); ev('pointermove', s0.x - 200, s0.y + 300); ev('pointerup', s0.x - 200, s0.y + 300);
+    expect(!!ikMiss && ikGizmo.material.color.getHex() === IK_COLOR.miss && !ikHint.hidden && ikLine.visible, 'промах: мишень красная, пунктир и подсказка');
+    const missPos = ikGizmo.position.clone(), gap0 = armTip().distanceTo(missPos);
+    expect(gap0 > IK_TOL && ikHint.textContent.includes(gap0.toFixed(2)), `подсказка называет недостающее расстояние ${gap0.toFixed(2)}`);
+    ticks; renderer.render(scene, camera);
+    expect(ikGizmo.position.distanceTo(missPos) < 1e-6, 'мишень осталась на месте, не прыгнула к руке');
+    addRow.querySelector('button[data-type="link"]').click(); // перестроили руку: длиннее
+    components[components.length - 1]._sliders.length.slider.value = 3;
+    components[components.length - 1]._sliders.length.slider.dispatchEvent(new Event('input'));
+    await new Promise(r => setTimeout(r, 0));
+    const gap1 = armTip().distanceTo(missPos);
+    expect(gap1 < gap0, `после перестройки цель проверена заново: было ${gap0.toFixed(2)}, стало ${gap1.toFixed(2)}`);
+    expect((gap1 <= IK_TOL) === (ikMiss === null), gap1 <= IK_TOL ? 'цель достигнута — промах снят' : 'всё ещё не достаёт — промах остаётся');
+    setIK(false); expect(ikHint.hidden && !ikLine.visible, 'выключение IK убирает подсказку');
+  })();
 } catch (e) { log('EXCEPTION', e.message, e.stack); }
-flush();
+flush(); })();
