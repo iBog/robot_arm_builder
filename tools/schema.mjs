@@ -37,7 +37,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   const file = path.join(root, 'schema.json');
   const text = JSON.stringify(buildSchema(), null, 2) + '\n';
   if (process.argv.includes('--check')) {
-    const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') : ''; // рабочая копия может быть CRLF
     if (cur !== text) { console.error('schema.json устарел: node tools/schema.mjs'); process.exit(1); }
     console.log('schema.json актуален');
   } else {
