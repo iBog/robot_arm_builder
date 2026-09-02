@@ -6,6 +6,8 @@
   "scripts": {
     "check": "node tests/check.mjs",
     "test": "node tests/check.mjs && node tests/run.mjs",
-    "test:fast": "node tests/check.mjs && node tests/run.mjs struct split build share golden"
-  }
+    "test:fast": "node tests/check.mjs && node tests/run.mjs struct split build share golden",
+    "release": "node tools/release.mjs"
+  },
+  "version": "1.7.0"
 }
