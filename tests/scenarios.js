@@ -167,24 +167,38 @@ await (async () => { try {
     const ctr = () => mill._spin.getWorldPosition(new THREE.Vector3());
     const axis = () => mill._spin.localToWorld(new THREE.Vector3(0, 1, 0)).sub(ctr()).normalize();
     const alive = () => chal.t3.alive.reduce((a, b) => a + b, 0), total = alive();
+    const push0 = pushObjects;
     pushObjects = function () {}; // капсулы руки проверяет сценарий push; здесь — только логика диска
     const poseAt = off => solve(() => ctr().distanceTo(grp.position.clone().add(off)) + 1.5 * (1 - Math.abs(axis().z)), J);
     const sweepTo = (off, n) => sweepLine(J, ctr, ctr(), grp.position.clone().add(off), () => 1.5 * (1 - Math.abs(axis().z)), n);
-    poseAt(new THREE.Vector3(0, 0.05, -0.55)); mill.speed = 50; ticks(2);
-    const a0 = alive(); sweepTo(new THREE.Vector3(0, 0.05, -0.2), 30);
+    poseAt(new THREE.Vector3(0, 0.3, -0.55)); mill.speed = 50; ticks(2);
+    const a0 = alive(); sweepTo(new THREE.Vector3(0, 0.3, -0.2), 30);
     expect(a0 - alive() < 60, `боковой подход вдоль оси почти не режет (снято ${a0 - alive()} из ${total})`);
-    mill.speed = 0; poseAt(new THREE.Vector3(0, 0.45, 0.25)); ticks(2); mill.speed = 50;
-    sweepTo(new THREE.Vector3(0, 0.11, 0.25), 40);
+    mill.speed = 0; poseAt(new THREE.Vector3(0, 0.7, 0.25)); ticks(2); mill.speed = 50;
+    sweepTo(new THREE.Vector3(0, 0.3, 0.25), 40);
     expect(chal.t3.offCut && !chal.done[2], 'пропил не посередине разделил чушку, но не засчитан');
     resetTask(); grp = chal.t3.group;
-    mill.speed = 0; poseAt(new THREE.Vector3(0, 0.45, 0)); ticks(2);
-    const a1 = alive(); sweepTo(new THREE.Vector3(0, 0.2, 0), 25);
+    mill.speed = 0; poseAt(new THREE.Vector3(0, 0.7, 0)); ticks(2);
+    const a1 = alive(); sweepTo(new THREE.Vector3(0, 0.35, 0), 25);
     expect(a1 === alive(), 'без оборотов диск не режет');
-    poseAt(new THREE.Vector3(0, 0.45, 0)); ticks(2); mill.speed = 50;
-    sweepTo(new THREE.Vector3(0, 0.06, 0), 40);
-    sweepTo(new THREE.Vector3(0.16, 0.06, 0), 20); sweepTo(new THREE.Vector3(-0.16, 0.06, 0), 30);
-    expect(chal.done[2], 'погружение и протяжка посередине — чушка распилена пополам');
-    chkFit.checked = false; camera.position.set(1.1, 1.1, 3.0); controls.target.set(-0.2, 0.2, 1.5);
+    poseAt(new THREE.Vector3(0, 0.7, 0)); ticks(2); mill.speed = 50;
+    /* одно погружение по глубине, без протяжки вбок: диск обязан пройти чушку насквозь,
+       не уходя под пол — ради этого cutR с запасом больше вершин зубьев */
+    sweepTo(new THREE.Vector3(0, 0.3, 0), 40);
+    expect(chal.done[2] && armMinY() >= -0.005,
+           `одно погружение посередине распилило чушку, рука над полом (minY ${armMinY().toFixed(3)})`);
+    expect(!chal.done[0] && !chal.done[1] && renderChalStatus() === undefined
+           && chalStatus.textContent.includes(t('chalLeft', '1, 2')), 'засчитано только третье: ' + chalStatus.textContent);
+    /* результат распила остаётся на экране: диск в пропиле чушку не сдувает,
+       выключенные обороты и движение вдоль оси — тоже */
+    pushObjects = push0;
+    const aDone = alive(), pDone = grp.position.clone();
+    mill.speed = 0; ticks(60);
+    sweepTo(new THREE.Vector3(0, 0.06, 0.3), 20); sweepTo(new THREE.Vector3(0, 0.5, 0.3), 20);
+    expect(grp.parent === chalRoot && alive() === aDone && grp.position.distanceTo(pDone) < 0.05,
+           `распиленная чушка осталась на месте (сдвиг ${grp.position.distanceTo(pDone).toFixed(2)}, вокселей ${alive()} из ${aDone})`);
+    pushObjects = function () {};
+    chkFit.checked = false; camera.position.set(1.1, 1.1, 3.0); controls.target.set(CHAL.billet.pos[0], 0.2, CHAL.billet.pos[1]);
   }
 
   /* ---------- чушку можно взять схватом, перенести и распилить на новом месте ---------- */
@@ -241,7 +255,27 @@ await (async () => { try {
     const s2 = components[0]._sliders.angle.slider; s2.value = 45; s2.dispatchEvent(new Event('input')); s2.dispatchEvent(new Event('change'));
     expect(chal.log.length === 1, 'после сброса запись идёт заново');
     setLang(lang === 'en' ? 'ru' : 'en'); expect(actList.querySelectorAll('.act').length === 1, 'смена языка перерисовала журнал');
+    /* ✕ с чистого листа закрывает молча, с прогрессом — переспрашивает */
+    const close = document.getElementById('chalClose');
+    chal.log = []; chal.done = [false, false, false];
+    close.click(); expect(chal === null && tutModal.hidden, '✕ без прогресса закрывает сразу');
+    startChallenge(); chal.done[0] = true;
+    close.click(); expect(!!chal && !tutModal.hidden, '✕ с прогрессом переспрашивает, режим не выключен');
+    tutActions.querySelector('button').click();
+    expect(!!chal && tutModal.hidden, '«Продолжить» оставляет в режиме');
+    close.click(); tutActions.querySelectorAll('button')[1].click();
+    expect(chal === null && tutModal.hidden, '«Всё равно выйти» выключает режим');
+    startChallenge();
     stopChallenge(); expect(chal === null && !document.body.className, 'режим выключен');
+    /* «Случайная рука» и «Новый проект» выходят из режима: подменить руку посреди
+       задания нельзя, её можно только достраивать по шагам */
+    startChallenge(); setTask(1); document.getElementById('btnGenerate').click();
+    expect(chal === null && !document.body.classList.contains('challenge') && chalPanel.hidden && chalRoot.children.length === 0,
+           'генерация вышла из режима заданий и убрала объекты');
+    startChallenge(); setTask(2);
+    document.getElementById('btnNew').click();
+    expect(chal === null && !document.body.classList.contains('challenge') && chalRoot.children.length === 0 && components.length === 0,
+           'новый проект вышел из режима заданий');
   }
 
   /* ---------- пол: слайдер, анимация, вне режима заданий ---------- */
@@ -331,7 +365,9 @@ await (async () => { try {
     btnChal.click(); expect(chalPanel.hidden && !!chal && btnChal.classList.contains('collapsed'), 'клик по кнопке сворачивает окно, режим не выключается');
     btnChal.click(); expect(!chalPanel.hidden, 'повторный клик разворачивает');
     btnChal.click(); completeTask(); expect(!chalPanel.hidden && btnChal.textContent === '🏆 1/3 ✓', 'выполнение задания разворачивает окно, на кнопке галочка');
-    document.getElementById('chalClose').click(); expect(chal === null && btnChal.textContent === t('chalBtn'), '✕ выходит из режима, кнопка обычная');
+    document.getElementById('chalClose').click(); // задание выполнено — ✕ переспрашивает
+    tutActions.querySelectorAll('button')[1].click();
+    expect(chal === null && btnChal.textContent === t('chalBtn'), '✕ с подтверждением выходит из режима, кнопка обычная');
     startChallenge(); stopChallenge();
     setLang(lang === 'en' ? 'ru' : 'en'); setTheme(theme === 'dark' ? 'light' : 'dark');
     expect(new RegExp(`lang=${lang}&theme=${theme}$`).test(shareURL()) && structShareURL().includes(`lang=${lang}`), 'после переключения язык и тема в обеих ссылках');
@@ -396,7 +432,7 @@ await (async () => { try {
     const toClient = p => { const v = p.clone().project(camera); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
     renderer.render(scene, camera);
     const start = toClient(ikGizmo.position), before = cleanConfig();
-    const ev = (type, x, y) => cv.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true }));
+    const ev = (type, x, y, pointerType) => cv.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, pointerType, bubbles: true }));
     ev('pointerdown', start.x, start.y);
     expect(!!ikDrag && !controls.enabled, 'нажатие на мишень начало перетаскивание');
     for (let k = 1; k <= 10; k++) ev('pointermove', start.x - 12 * k, start.y + 6 * k);
@@ -405,6 +441,14 @@ await (async () => { try {
     expect(!ikDrag && controls.enabled && JSON.stringify(before) !== JSON.stringify(after), 'после отпускания камера свободна, поза изменилась');
     expect(chal.log.length > 0 && chal.log.every(a => a.kind === 'param'), `в журнал записаны параметры: ${chal.log.length}`);
     ev('pointerdown', 5, 5); expect(!ikDrag, 'нажатие мимо мишени ничего не начинает');
+    /* тач: пальцем в маленький шарик не попасть — рядом с ним касание всё равно берёт мишень */
+    renderer.render(scene, camera);
+    const near = toClient(ikGizmo.position), miss = { x: near.x + 20, y: near.y };
+    ev('pointerdown', miss.x, miss.y, 'mouse');
+    expect(!ikDrag, 'мышью мимо меша мишени — промах (иначе проверка ниже ничего не значит)');
+    ev('pointerdown', miss.x, miss.y, 'touch');
+    expect(!!ikDrag, 'пальцем на том же месте мишень взята');
+    ev('pointerup', miss.x, miss.y, 'touch');
     stopChallenge();
     /* недостижимая цель: мишень краснеет и остаётся, подсказка с расстоянием; перестройка руки принимает цель */
     setArm([{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 0.5 }, { type: 'gripper', open: 50 }]);

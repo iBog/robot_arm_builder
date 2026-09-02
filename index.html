@@ -165,7 +165,9 @@
   }
   #chalPanel[hidden] { display: none; }
   .chal-head { display: flex; align-items: center; font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
-  .chal-head .chal-close { margin-left: auto; cursor: pointer; color: var(--muted); font-weight: 700; padding: 0 4px; }
+  .chal-head .chal-min, .chal-head .chal-close { cursor: pointer; color: var(--muted); font-weight: 700; padding: 0 4px; }
+  .chal-head .chal-min { margin-left: auto; font-size: 11px; line-height: 1; }
+  .chal-head .chal-min:hover { color: var(--accent); }
   .chal-head .chal-close:hover { color: var(--danger); }
   .chal-tasks { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
   .chal-task { display: flex; gap: 6px; color: var(--muted); border-radius: 5px; padding: 1px 4px; margin: 0 -4px; }
@@ -577,7 +579,7 @@
   </div>
   <div id="startHint" hidden></div>
   <div id="chalPanel" hidden>
-    <div class="chal-head"><span id="chalTitle"></span><span class="chal-close" id="chalClose">✕</span></div>
+    <div class="chal-head"><span id="chalTitle"></span><span class="chal-min" id="chalMin">▼</span><span class="chal-close" id="chalClose">✕</span></div>
     <div class="chal-tasks" id="chalTasks"></div>
     <div class="chal-desc" id="chalDesc"></div>
     <div class="chal-status" id="chalStatus"></div>
@@ -807,6 +809,13 @@ const STR = {
                    ru: 'Свернуть или развернуть окно задания (выход — ✕ в его шапке)' },
   chalTitle:  { en: '🏆 Challenge',                   ru: '🏆 Задания' },
   chalExit:   { en: 'Exit challenge mode',            ru: 'Выйти из режима заданий' },
+  chalMin:    { en: 'Collapse the panel (the 🏆 button brings it back)',
+                ru: 'Свернуть окно (вернуть — кнопкой 🏆)' },
+  chalQuitTitle: { en: 'Interrupt the challenge?', ru: 'Прервать задания?' },
+  chalQuitText: { en: d => `Tasks done: ${d} of 3. Leaving clears the progress and the action log — the arm itself stays as it is.`,
+                  ru: d => `Выполнено заданий: ${d} из 3. Выход сбросит прогресс и запись действий — сама рука останется как есть.` },
+  chalQuitStay: { en: 'Keep going',                   ru: 'Продолжить' },
+  chalQuitLeave: { en: 'Leave anyway',                ru: 'Всё равно выйти' },
   chalTask1:  { en: 'Pick & place the cube',          ru: 'Перенести кубик' },
   chalTask2:  { en: 'Drill 4 holes',                  ru: 'Просверлить 4 отверстия' },
   chalTask3:  { en: 'Cut the billet in half',         ru: 'Распилить чушку пополам' },
@@ -829,6 +838,7 @@ const STR = {
   chalOffCut: { en: '✂️ an off-center cut doesn\'t count — the halves must be equal',
                 ru: '✂️ пропил не посередине не засчитан — половины должны быть равными' },
   chalTaskDone: { en: '✅ Task complete!',            ru: '✅ Задание выполнено!' },
+  chalLeft:   { en: n => `Still to do: ${n}`,        ru: n => `Осталось: ${n}` },
   chalAllDone: { en: '🎉 All three tasks are done — your arm is a real worker!',
                  ru: '🎉 Все три задания выполнены — ваша рука настоящий работяга!' },
   chalReset:  { en: '↺ Reset task',                   ru: '↺ Сбросить' },
@@ -1052,9 +1062,10 @@ const GEOM = {
   gripper:   { palm: [0.5, 0.16, 0.3], finger: [0.09, 0.42, 0.16], fingerY: 0.37, gap0: 0.05, gapRange: 0.18 },
   suction:   { body: { r: [0.14, 0.17], h: 0.16 }, cup: { r: 0.24, h: 0.2 }, attach: 0.38 },
   drill:     { body: { r: [0.16, 0.19], h: 0.3 }, bit: { r: [0.035, 0.02], len: 0.34 }, flute: [0.09, 0.22, 0.02], fluteY: 0.14, attach: 0.66 },
-  /* cutR/cutHalf — режущий объём диска до вершин зубьев (для заданий) */
-  mill:      { stem: { r: [0.07, 0.09], h: 0.3 }, spinY: 0.34, disk: { r: 0.2, h: 0.07 }, teeth: { n: 9, size: 0.07, r: 0.235 },
-               cutR: 0.28, cutHalf: 0.045, attach: 0.42 },
+  /* cutR/cutHalf — режущий объём диска: он с запасом больше вершин зубьев, иначе диск
+     упрётся в пол раньше, чем пройдёт лежащую на полу чушку насквозь (см. checkGeomSpec) */
+  mill:      { stem: { r: [0.08, 0.1], h: 0.42 }, spinY: 0.5, disk: { r: 0.3, h: 0.07 }, teeth: { n: 12, size: 0.09, r: 0.345 },
+               cutR: 0.46, cutHalf: 0.05, attach: 0.6 },
 };
 /* средний радиус усечённого цилиндра — для URDF, где конуса нет */
 const gAvgR = r => (r[0] + r[1]) / 2;
@@ -1852,6 +1863,7 @@ function randLen(a, b) { return +rand(a, b).toFixed(2); }
 
 function generateArm() {
   cancelTutorial();
+  stopChallenge(); // руку посреди задания не подменить — только достроить по шагам
   const c = [];
 
   /* иногда — рельс в основании */
@@ -1907,6 +1919,7 @@ document.getElementById('btnGenerate').onclick = generateArm;
 /* очищает цепочку и возвращает стартовый вид: чистый лист */
 function newProject() {
   cancelTutorial();
+  stopChallenge(); // чистый лист — это и выход из режима заданий
   if (components.length) pushUndo();
   withLog(() => { components = []; buildArm(); renderPanel(); });
   camera.position.copy(CAM_HOME.pos);
@@ -3031,6 +3044,12 @@ ikGizmo.visible = false;
 scene.add(ikGizmo);
 const ikRay = new THREE.Raycaster(), ikNDC = new THREE.Vector2(), ikPlane = new THREE.Plane();
 const _ikTip = new THREE.Vector3(), _ikTarget = new THREE.Vector3(), _ikDir = new THREE.Vector3();
+const _ikScr = new THREE.Vector3();
+/* Тач: пальцем в шарик радиусом 0.09 не попасть — на грубом указателе мишень крупнее,
+   а попадание засчитывается и мимо меша, в пределах IK_GRAB_PX пикселей от его центра. */
+const IK_GRAB_PX = { mouse: 8, pen: 16, touch: 26 };
+const ikCoarse = !!window.matchMedia?.('(pointer: coarse)').matches;
+if (ikCoarse) ikGizmo.scale.setScalar(1.7);
 let ikDrag = null; // { start: [{c, p, i, v0}] } во время перетаскивания
 /* Недостижимая цель: мишень краснеет и остаётся там, куда её поставили, пунктир
    тянется от конца руки, подсказка называет недостающее расстояние. Рука может
@@ -3146,7 +3165,13 @@ function ikPointerNDC(e) {
 function ikHit(e) {
   if (!ikOn) return false;
   ikPointerNDC(e);
-  return ikRay.intersectObject(ikGizmo).length > 0;
+  if (ikRay.intersectObject(ikGizmo).length) return true;
+  const r = renderer.domElement.getBoundingClientRect();
+  const p = _ikScr.copy(ikGizmo.position).project(camera);
+  if (p.z > 1) return false; // мишень за камерой
+  const dx = e.clientX - (r.left + (p.x + 1) / 2 * r.width);
+  const dy = e.clientY - (r.top + (1 - p.y) / 2 * r.height);
+  return Math.hypot(dx, dy) <= (IK_GRAB_PX[e.pointerType] ?? IK_GRAB_PX.touch);
 }
 
 renderer.domElement.addEventListener('pointerdown', e => {
@@ -3220,36 +3245,37 @@ const btnHelp = document.getElementById('btnHelp');
 
 function hideTutModal() { tutModal.hidden = true; }
 
-/* Диалоги: ask — два вопроса, about — «что это такое», done — поздравление */
-function showTutModal(mode) {
-  const title = document.getElementById('tutTitle');
-  const text = document.getElementById('tutText');
+/* Оболочка модалки — общая для обучения и подтверждений: заголовок, текст и
+   колонка кнопок `[{label, cb, primary}]`; клик по фону равносилен отмене. */
+function showModal(title, text, buttons) {
+  document.getElementById('tutTitle').textContent = title;
+  document.getElementById('tutText').textContent = text;
   const actions = document.getElementById('tutActions');
   actions.innerHTML = '';
-  const mk = (label, cb, primary) => {
-    const b = document.createElement('button');
-    b.textContent = label;
-    if (primary) b.className = 'primary';
-    b.onclick = cb;
-    actions.appendChild(b);
-  };
-  if (mode === 'ask') {
-    title.textContent = t('tutAskTitle');
-    text.textContent = t('tutAskText');
-    mk(t('tutBtnWhat'), () => showTutModal('about'));
-    mk(t('tutBtnGuide'), startTutorial, true);
-    mk(t('tutBtnLater'), hideTutModal);
-  } else if (mode === 'about') {
-    title.textContent = t('tutAboutTitle');
-    text.textContent = t('tutAboutText');
-    mk(t('tutBtnTry'), startTutorial, true);
-    mk(t('tutBtnOk'), hideTutModal);
-  } else { // done
-    title.textContent = t('tutDoneTitle');
-    text.textContent = t('tutDoneText');
-    mk(t('tutBtnDone'), hideTutModal, true);
+  for (const b of buttons) {
+    const el = document.createElement('button');
+    el.textContent = b.label;
+    if (b.primary) el.className = 'primary';
+    el.onclick = b.cb;
+    actions.appendChild(el);
   }
   tutModal.hidden = false;
+}
+
+/* Диалоги: ask — два вопроса, about — «что это такое», done — поздравление */
+function showTutModal(mode) {
+  if (mode === 'ask') showModal(t('tutAskTitle'), t('tutAskText'), [
+    { label: t('tutBtnWhat'), cb: () => showTutModal('about') },
+    { label: t('tutBtnGuide'), cb: startTutorial, primary: true },
+    { label: t('tutBtnLater'), cb: hideTutModal },
+  ]);
+  else if (mode === 'about') showModal(t('tutAboutTitle'), t('tutAboutText'), [
+    { label: t('tutBtnTry'), cb: startTutorial, primary: true },
+    { label: t('tutBtnOk'), cb: hideTutModal },
+  ]);
+  else showModal(t('tutDoneTitle'), t('tutDoneText'), [
+    { label: t('tutBtnDone'), cb: hideTutModal, primary: true },
+  ]);
 }
 
 btnHelp.onclick = () => showTutModal('ask');
@@ -3345,7 +3371,9 @@ const CHAL = {
   wall:   { x: -2.1, thick: 0.12, height: 2.0, width: 1.4, color: 0xcdbfa3, bore: 0x454a52,
             square: { y: 1.3, side: 0.5 }, tol: 0.075, maxHoles: 12 },
   drill:  { r: GEOM.drill.bit.r[0], len: GEOM.drill.bit.len }, // из реестра GEOM
-  billet: { pos: [-0.2, 1.5], r: 0.14, len: 0.8, voxel: 0.02, color: 0xaeb6c0, midTol: 4 },
+  /* чушка дальше от основания, чем кольцо: вплотную к базе рука не складывается —
+     не хватает габаритов, до чушки должно доставать вытянутое, а не сложенное плечо */
+  billet: { pos: [-0.3, 1.9], r: 0.14, len: 0.8, voxel: 0.02, color: 0xaeb6c0, midTol: 4 },
   mill:   { r: GEOM.mill.cutR, halfThick: GEOM.mill.cutHalf },  // из реестра GEOM
   /* окно захвата в системе координат схвата: где должен быть центр кубика */
   grip:   { minY: 0.2, maxY: 0.62, maxX: 0.07, maxZ: 0.14, tol: 0.03 },
@@ -3371,7 +3399,11 @@ function checkGeomSpec() {
   if (TYPES.gripper.height < g.fingerY) errors.push('gripper: точка крепления ниже пальцев');
   if (2 * (g.gap0 + g.gapRange) - g.finger[0] < CHAL.cube.size + CHAL.grip.tol) errors.push('gripper: кубик задания не проходит между пальцами');
   if (CHAL.grip.minY > g.fingerY || CHAL.grip.maxY < g.fingerY) errors.push('CHAL.grip: окно захвата не накрывает пальцы');
-  if (G.mill.cutR < G.mill.teeth.r + G.mill.teeth.size / 2) errors.push('mill.cutR меньше вершин зубьев');
+  /* «за один проход по глубине»: ниже вершин зубьев диск не опустить — пол; чтобы он
+     всё же прошёл лежащую чушку насквозь, режущая кромка должна доставать глубже них */
+  const millTip = G.mill.teeth.r + G.mill.teeth.size / 2;
+  if (G.mill.cutR < millTip) errors.push('mill.cutR меньше вершин зубьев');
+  if (G.mill.cutR - millTip < CHAL.billet.r * 0.4) errors.push('mill: кромка не проходит чушку насквозь, пока диск не упёрся в пол');
   if (G.mill.cutHalf < G.mill.disk.h / 2) errors.push('mill.cutHalf тоньше диска');
   if (G.mill.attach < G.mill.spinY + G.mill.disk.h / 2) errors.push('mill: диск выше точки крепления');
   if (G.mill.spinY < G.mill.stem.h) errors.push('mill: диск внутри штока');
@@ -3594,10 +3626,14 @@ function objSegment(h) {
   return { a: h.obj.position.clone().sub(a), b: h.obj.position.clone().add(a), r: B.r };
 }
 
+/* Результат выполненного задания замирает: распиленная чушка остаётся на экране такой,
+   какой её оставил пропил, — до «Сбросить» или перехода к другому заданию. */
+function taskFrozen(h) { return h.kind === 'billet' && chal.done[2]; }
+
 /* свободные предметы выталкиваются из деталей руки по горизонтали (пол и стенки загона не переезжаются) */
 function pushObjects() {
   for (const h of chal.holdables) {
-    if (chal.held?.h === h) continue;
+    if (chal.held?.h === h || taskFrozen(h)) continue;
     const skip = new Set();
     for (const c of components) {
       const pv = pivots[components.indexOf(c)];
@@ -3952,6 +3988,7 @@ function billetSplit(T) {
 
 function tickMill() {
   const T = chal.t3, M = CHAL.mill, B = CHAL.billet;
+  if (chal.done[2]) return; // задание выполнено — распил сохраняется как есть (см. taskFrozen)
   let changed = false;
   T.group.updateMatrixWorld(true);
   for (const c of components) {
@@ -4132,6 +4169,7 @@ function renderChalHUD() {
   if (!chal) return;
   renderChalButton();
   document.getElementById('chalTitle').textContent = t('chalTitle');
+  document.getElementById('chalMin').title = t('chalMin');
   document.getElementById('chalClose').title = t('chalExit');
   const tasks = document.getElementById('chalTasks');
   tasks.innerHTML = '';
@@ -4174,6 +4212,9 @@ function renderChalStatus() {
   const need = CHAL_TOOLS[chal.task], lines = [];
   if (chal.done[chal.task]) {
     lines.push(`<span class="ok">${t(chal.done.every(Boolean) ? 'chalAllDone' : 'chalTaskDone')}</span>`);
+    /* выполнено одно задание — не победа: сразу видно, какие ещё не сделаны */
+    const left = chal.done.map((d, i) => (d ? null : i + 1)).filter(Boolean);
+    if (left.length) lines.push(t('chalLeft', left.join(', ')));
   } else if (!components.some(c => c.type === need)) {
     lines.push(`<span class="warn">${t('chalNeed', tr(TYPES[need].label))}</span>`);
   }
@@ -4208,7 +4249,22 @@ function challengeTick(now) {
 }
 
 btnChal.onclick = () => (chal ? setChalCollapsed(!chalCollapsed) : startChallenge());
-document.getElementById('chalClose').onclick = stopChallenge;
+document.getElementById('chalMin').onclick = () => setChalCollapsed(true);
+
+/* Есть ли что терять при выходе: выполненные задания или действия рукой. Сам по себе
+   переход между заданиями прогрессом не считается — за него переспрашивать не о чем. */
+function chalProgress() {
+  return !!chal && (chal.done.some(Boolean) || chal.log.some(a => a.kind !== 'task'));
+}
+
+/* ✕ обрывает прохождение: с прогрессом — переспрашиваем, с чистого листа — молча */
+document.getElementById('chalClose').onclick = () => {
+  if (!chalProgress()) { stopChallenge(); return; }
+  showModal(t('chalQuitTitle'), t('chalQuitText', chal.done.filter(Boolean).length), [
+    { label: t('chalQuitStay'), cb: hideTutModal, primary: true },
+    { label: t('chalQuitLeave'), cb: () => { hideTutModal(); stopChallenge(); } },
+  ]);
+};
 
 /* ---- Запись действий: журнал, отмена последнего, воспроизведение ---- */
 
