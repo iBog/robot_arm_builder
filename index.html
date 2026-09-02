@@ -806,7 +806,19 @@ const LANG_KEY = 'roboArmLang';
 function storedLang() {
   try { return localStorage.getItem(LANG_KEY); } catch { return null; }
 }
-let lang = LANGS.includes(storedLang()) ? storedLang()
+
+/* Параметр ссылки: ?k=v в query или #k=v во фрагменте (как и код руки).
+   Язык и тема из ссылки применяются только к этой загрузке — сохранённый
+   выбор получателя не перезаписывают, пока он сам не переключит. */
+function urlParam(k) {
+  const qs = new URLSearchParams(location.search);
+  const hs = new URLSearchParams(location.hash.replace(/^#\??/, ''));
+  return qs.get(k) ?? hs.get(k);
+}
+
+const urlLang = (urlParam('lang') || '').toLowerCase().slice(0, 2);
+let lang = LANGS.includes(urlLang) ? urlLang
+  : LANGS.includes(storedLang()) ? storedLang()
   : (navigator.language || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
 
 /* t('key', ...args) — строка интерфейса; tr({en,ru}) — двуязычное поле данных */
@@ -841,7 +853,8 @@ const THEME_KEY = 'roboArmTheme';
 function storedTheme() {
   try { return localStorage.getItem(THEME_KEY); } catch { return null; }
 }
-let theme = THEMES.includes(storedTheme()) ? storedTheme() : 'light';
+const urlTheme = (urlParam('theme') || '').toLowerCase();
+let theme = THEMES.includes(urlTheme) ? urlTheme : THEMES.includes(storedTheme()) ? storedTheme() : 'light';
 /* SCN — цвета сцены текущей темы; перечитывается в applyTheme() */
 let SCN = SCENE_THEME[theme];
 document.documentElement.dataset.theme = theme; // до отрисовки, чтобы не мигало
@@ -2733,10 +2746,7 @@ btnUndo.onclick = () => {
    руки: демо-рука вводила бы в заблуждение, будто её собрал этот код. */
 let badLink = false;
 function loadFromURL() {
-  const qs = new URLSearchParams(location.search);
-  const hs = new URLSearchParams(location.hash.replace(/^#\??/, ''));
-  const get = k => qs.get(k) ?? hs.get(k);
-  const code = get('c'), struct = get('s'), legacy = get('config');
+  const code = urlParam('c'), struct = urlParam('s'), legacy = urlParam('config');
   if (code === null && struct === null && legacy === null) return false;
   try {
     let data;
