@@ -3305,8 +3305,10 @@ const CHAL = {
   cube:   { size: 0.24, pos: [0.4, 1.6], color: 0xf2a03d },
   ring:   { pos: [1.5, 0.5], rIn: 0.3, rOut: 0.36, color: 0x2f7fff },
   pen:    { pos: [-1.0, 1.2], half: 0.25, wall: 0.03, height: 0.08, color: 0x35c26a },
-  wall:   { x: -1.85, thick: 0.12, height: 1.2, width: 1.4, color: 0xcdbfa3, bore: 0x454a52,
-            square: { y: 0.65, side: 0.5 }, tol: 0.075, maxHoles: 12 },
+  /* стена дальше и выше, разметка на высоте плеча: сверлить удобно движением
+     параллельно полу, а не снизу вверх */
+  wall:   { x: -2.1, thick: 0.12, height: 2.0, width: 1.4, color: 0xcdbfa3, bore: 0x454a52,
+            square: { y: 1.3, side: 0.5 }, tol: 0.075, maxHoles: 12 },
   drill:  { r: GEOM.drill.bit.r[0], len: GEOM.drill.bit.len }, // из реестра GEOM
   billet: { pos: [-0.2, 1.5], r: 0.14, len: 0.8, voxel: 0.02, color: 0xaeb6c0, midTol: 4 },
   mill:   { r: GEOM.mill.cutR, halfThick: GEOM.mill.cutHalf },  // из реестра GEOM
@@ -4073,9 +4075,15 @@ function gotoTask(i) {
   recordAction({ kind: 'task', from, to: i });
 }
 
+/* Сброс задания — начать с чистого листа: журнал действий очищается, рука
+   возвращается в нулевую позу (setTask), её текущий состав становится точкой
+   отсчёта для повтора. */
 function resetTask() {
+  stopReplay();
+  chal.log = [];
   setTask(chal.task);
-  recordAction({ kind: 'reset', task: chal.task });
+  chal.startConfig = cleanConfig();
+  renderLog();
 }
 
 function completeTask() {

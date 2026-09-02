@@ -41,7 +41,7 @@ function chromePath() {
   return p;
 }
 const CHROME = chromePath();
-const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/\r\n/g, '\n'); // рабочая копия может быть CRLF
 const anchor = 'renderPanel();\nif (fromLink) {';
 if (index.split(anchor).length !== 2) { console.error('якорь старта не найден в index.html'); process.exit(2); }
 const goldenPath = path.join(here, 'golden.json');

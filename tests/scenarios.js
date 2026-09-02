@@ -140,7 +140,7 @@ await (async () => { try {
     const tipOf = () => drill._spin.localToWorld(new THREE.Vector3(0, CHAL.drill.len, 0));
     const dirOf = () => tipOf().sub(drill._spin.getWorldPosition(new THREE.Vector3())).normalize();
     const want = new THREE.Vector3(-1, 0, 0), aim = tgt => () => tipOf().distanceTo(tgt) + 0.2 * dirOf().distanceTo(want);
-    const stray = new THREE.Vector3(CHAL.wall.x - 0.03, 0.65, 0);
+    const stray = new THREE.Vector3(CHAL.wall.x - 0.03, CHAL.wall.square.y, 0);
     solve(aim(stray), J); drill.speed = 50; ticks(3);
     expect(chal.t2.holes.length === 1 && !chal.t2.drilled.some(Boolean), 'лишнее отверстие в центре — есть, но не засчитано');
     solve(aim(stray.clone().add(new THREE.Vector3(0, 0.15, 0))), J); ticks(3);
@@ -155,7 +155,7 @@ await (async () => { try {
       expect(chal.t2.drilled[k], `угол ${k}: просверлен`);
     }
     expect(chal.done[1], 'задание 2 выполнено');
-    chkFit.checked = false; camera.position.set(-0.5, 1.15, 1.0); controls.target.set(-1.85, 0.65, 0);
+    chkFit.checked = false; camera.position.set(CHAL.wall.x + 1.4, CHAL.wall.square.y + 0.5, 1.0); controls.target.set(CHAL.wall.x, CHAL.wall.square.y, 0);
   }
 
   /* ---------- задание 3: фреза режет в плоскости, боком толкает, половины по связности ---------- */
@@ -235,7 +235,12 @@ await (async () => { try {
     chkLoop.checked = false; ticks(500);
     expect(!chal.replay && components[0].angle === 45 && components[components.length - 1].angle === -90, 'однократный повтор дошёл до конца');
     expect(f3(camera.position).join() === '9,4,9', 'камера не тронута');
-    setLang(lang === 'en' ? 'ru' : 'en'); expect(actList.querySelectorAll('.act').length === 3, 'смена языка перерисовала журнал');
+    /* сброс задания: журнал пуст, рука в нулевой позе, состав сохранён и стал точкой отсчёта повтора */
+    const nBefore = components.length; resetTask();
+    expect(chal.log.length === 0 && components[0].angle === 0 && components.length === nBefore && chal.startConfig.length === nBefore && actList.querySelectorAll('.act').length === 0 && !chal.replay, 'сброс: журнал очищен, поза нулевая, состав сохранён');
+    const s2 = components[0]._sliders.angle.slider; s2.value = 45; s2.dispatchEvent(new Event('input')); s2.dispatchEvent(new Event('change'));
+    expect(chal.log.length === 1, 'после сброса запись идёт заново');
+    setLang(lang === 'en' ? 'ru' : 'en'); expect(actList.querySelectorAll('.act').length === 1, 'смена языка перерисовала журнал');
     stopChallenge(); expect(chal === null && !document.body.className, 'режим выключен');
   }
 
