@@ -342,15 +342,16 @@
   #addRow {
     grid-area: toolbar;
     background: var(--panel);
-    padding: 10px 12px;
+    padding: 8px 10px;
     border-bottom: 1px solid var(--border);
-    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   }
+  /* кнопки узкие: двенадцать типов должны укладываться в одну строку на десктопе */
   #addRow button {
     background: var(--panel2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px;
-    padding: 8px 12px; cursor: pointer; font-size: 13.5px;
-    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 6px 9px; cursor: pointer; font-size: 12.5px;
+    display: inline-flex; align-items: center; gap: 5px;
   }
   .ico { flex: none; display: inline-block; vertical-align: -3px; }
   #addRow button:hover { filter: brightness(1.25); }
@@ -507,7 +508,7 @@
       flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
       padding: 8px 10px; gap: 6px; -webkit-overflow-scrolling: touch;
     }
-    #addRow button { flex: none; padding: 7px 10px; font-size: 12.5px; }
+    #addRow button { flex: none; }
     #sidebar {
       border-left: none; border-top: 1px solid var(--border);
       max-height: 45dvh; min-height: 0;
@@ -939,7 +940,7 @@ const TYPES = {
   yaw: {
     code: 0,
     icon: '🔄',
-    label: { en: 'Yaw', ru: 'Поворот' },
+    label: { en: 'Turntable', ru: 'Турель' }, // не «Поворот»: с «Вращением» это синонимы, а деталь — тяжёлая ось у основания
     color: 0x4da3ff,
     params: [{ key: 'angle', label: { en: 'Angle, °', ru: 'Угол, °' }, min: -180, max: 180, step: 1, def: 0 }],
     height: 0.5,
@@ -1652,7 +1653,7 @@ function renderAddRow() {
   for (const [type, ty] of Object.entries(TYPES)) {
     const b = document.createElement('button');
     const hex = '#' + ty.color.toString(16).padStart(6, '0');
-    b.innerHTML = `${iconSVG(type, 22)}+ ${tr(ty.label)}`;
+    b.innerHTML = `${iconSVG(type, 18)}+ ${tr(ty.label)}`;
     b.style.borderColor = hex + '55';
     b.title = t('addTip', tr(ty.label));
     b.dataset.type = type; // для подсветки шага обучения
@@ -3221,11 +3222,11 @@ renderer.domElement.addEventListener('pointercancel', ikDragEnd);
 
 /* ================= Обучение: пошаговая сборка первой руки ================= */
 
-/* Сценарий: поворотный стол → звено → наклон → звено → вращение → схват */
+/* Сценарий: турель → звено → наклон → звено → вращение → схват */
 const TUTORIAL = ['yaw', 'link', 'pitch', 'link', 'roll', 'gripper'];
 const TUT_FLAVOR = [
   { en: 'Let\'s start with the base! The turntable spins the whole arm left and right.',
-    ru: 'Начнём с основания! Поворотный стол крутит всю руку влево-вправо.' },
+    ru: 'Начнём с основания! Турель — поворотный стол, она крутит всю руку влево-вправо.' },
   { en: 'Now a link — the "bone" of the arm: it makes the arm longer.',
     ru: 'Теперь звено — «кость» руки: оно делает её длиннее.' },
   { en: 'Add a pitch joint — the "elbow" that bends the arm.',

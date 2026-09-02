@@ -11,7 +11,7 @@
         "properties": {
           "type": {
             "const": "yaw",
-            "description": "Yaw / Поворот"
+            "description": "Turntable / Турель"
           },
           "angle": {
             "type": "number",
