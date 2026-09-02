@@ -977,6 +977,34 @@ const TYPES = {
    maxOf: 'key' — верхняя граница параметра ограничена другим параметром компонента. */
 function paramMax(c, p) { return p.maxOf ? Math.min(p.max, c[p.maxOf] ?? p.max) : p.max; }
 
+/* ================= Геометрия деталей: единый реестр ================= */
+
+/* Размеры деталей в единицах сцены — в одном месте: их читают buildArm() (3D),
+   makeZone(), buildURDF() (экспорт), захват и столкновения (CHAL). Цилиндры —
+   { r: [верх, низ], h } или r числом (ось — вдоль руки), коробки — [x, y, z]
+   в осях three.js. attach — где крепится следующий компонент; у yaw/pitch/roll/
+   gripper это TYPES[*].height. Меняя форму детали, правь только здесь. */
+const GEOM = {
+  base:      { r: [0.55, 0.7], h: 0.25 },
+  yaw:       { body: [0.34, 0.4], mark: { w: 0.06, d: 0.42, z: 0.2, hFrac: 0.7 } },
+  roll:      { body: [0.24, 0.28], mark: { w: 0.05, d: 0.3, z: 0.16, hFrac: 0.8 } },
+  pitch:     { axle: { r: 0.26, len: 0.62 }, cap: { r: 0.29, w: 0.07, x: 0.33 } },
+  link:      { r: [0.16, 0.19] },
+  offset:    { block: 0.24, arm: { w: 0.2, h: 0.16, y: 0.2, extra: 0.1 }, endY: 0.28 },
+  prismatic: { body: [0.22, 0.25], rod: 0.13 },
+  spherical: { socket: { r: [0.3, 0.34], h: 0.2 }, ball: { r: 0.26, y: 0.32 }, stub: { r: 0.09, len: 0.3 } },
+  rail:      { track: [4.6, 0.12, 0.5], car: [0.7, 0.18, 0.58], carY: 0.21, attach: 0.3 },
+  /* пальцы: смещение от оси gap0 + open% · gapRange, ширина finger[0] */
+  gripper:   { palm: [0.5, 0.16, 0.3], finger: [0.09, 0.42, 0.16], fingerY: 0.37, gap0: 0.05, gapRange: 0.18 },
+  suction:   { body: { r: [0.14, 0.17], h: 0.16 }, cup: { r: 0.24, h: 0.2 }, attach: 0.38 },
+  drill:     { body: { r: [0.16, 0.19], h: 0.3 }, bit: { r: [0.035, 0.02], len: 0.34 }, flute: [0.09, 0.22, 0.02], fluteY: 0.14, attach: 0.66 },
+  /* cutR/cutHalf — режущий объём диска до вершин зубьев (для заданий) */
+  mill:      { stem: { r: [0.07, 0.09], h: 0.3 }, spinY: 0.34, disk: { r: 0.2, h: 0.07 }, teeth: { n: 9, size: 0.07, r: 0.235 },
+               cutR: 0.28, cutHalf: 0.045, attach: 0.42 },
+};
+/* средний радиус усечённого цилиндра — для URDF, где конуса нет */
+const gAvgR = r => (r[0] + r[1]) / 2;
+
 /* ---- SVG-иконки компонентов: единый линейный стиль ---- */
 const ICONS = {
   /* вертикальная ось + эллипс вращения со стрелкой */
@@ -1213,7 +1241,7 @@ function makeZone(c, holder, attachY) {
     zone.position.y = attachY;
   } else if (c.type === 'gripper') {
     /* пунктир хода пальцев схвата */
-    const y = 0.16 + 0.21, xMax = 0.05 + 0.18 + 0.06;
+    const y = GEOM.gripper.fingerY, xMax = GEOM.gripper.gap0 + GEOM.gripper.gapRange + 0.06;
     zone.add(makeDashedLine(col, [
       new THREE.Vector3(-xMax, y, 0), new THREE.Vector3(xMax, y, 0),
     ]));
@@ -1257,12 +1285,12 @@ function buildArm() {
 
   /* Неподвижное основание */
   const base = new THREE.Group();
-  base.add(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 0.25, 32), mat(SCN.base))));
-  base.children[0].position.y = 0.125;
+  base.add(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...GEOM.base.r, GEOM.base.h, 32), mat(SCN.base))));
+  base.children[0].position.y = GEOM.base.h / 2;
   armRoot.add(base);
 
-  let parent = base;      // группа, к которой крепим следующий компонент
-  let attachY = 0.25;     // высота точки крепления в системе parent
+  let parent = base;        // группа, к которой крепим следующий компонент
+  let attachY = GEOM.base.h; // высота точки крепления в системе parent
 
   for (const c of components) {
     const t = TYPES[c.type];
@@ -1272,11 +1300,12 @@ function buildArm() {
     pivots.push(pivot);
 
     if (c.type === 'yaw') {
-      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.4, t.height, 28), mat(t.color)));
+      const G = GEOM.yaw;
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.body, t.height, 28), mat(t.color)));
       body.position.y = t.height / 2;
       pivot.add(body);
-      const mark = new THREE.Mesh(new THREE.BoxGeometry(0.06, t.height * 0.7, 0.42), mat(SCN.mark));
-      mark.position.set(0, t.height / 2, 0.2);
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(G.mark.w, t.height * G.mark.hFrac, G.mark.d), mat(SCN.mark));
+      mark.position.set(0, t.height / 2, G.mark.z);
       pivot.add(mark);
       pivot.rotation.y = THREE.MathUtils.degToRad(c.angle ?? 0);
       makeZone(c, parent, attachY);
@@ -1285,12 +1314,13 @@ function buildArm() {
 
     } else if (c.type === 'pitch') {
       /* корпус-ось лежит горизонтально; вращение вокруг X */
-      const axle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.62, 24), mat(t.color)));
+      const G = GEOM.pitch;
+      const axle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(G.axle.r, G.axle.r, G.axle.len, 24), mat(t.color)));
       axle.rotation.z = Math.PI / 2;
       axle.position.y = t.height / 2;
-      const cap1 = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.07, 24), mat(SCN.joint));
-      cap1.rotation.z = Math.PI / 2; cap1.position.set(0.33, t.height / 2, 0);
-      const cap2 = cap1.clone(); cap2.position.x = -0.33;
+      const cap1 = new THREE.Mesh(new THREE.CylinderGeometry(G.cap.r, G.cap.r, G.cap.w, 24), mat(SCN.joint));
+      cap1.rotation.z = Math.PI / 2; cap1.position.set(G.cap.x, t.height / 2, 0);
+      const cap2 = cap1.clone(); cap2.position.x = -G.cap.x;
       /* внутренняя группа вращается вокруг оси */
       const rot = new THREE.Group();
       rot.position.y = t.height / 2;
@@ -1302,11 +1332,12 @@ function buildArm() {
       attachY = t.height / 2;
 
     } else if (c.type === 'roll') {
-      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, t.height, 24), mat(t.color)));
+      const G = GEOM.roll;
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.body, t.height, 24), mat(t.color)));
       body.position.y = t.height / 2;
       pivot.add(body);
-      const mark = new THREE.Mesh(new THREE.BoxGeometry(0.05, t.height * 0.8, 0.3), mat(SCN.mark));
-      mark.position.set(0, t.height / 2, 0.16);
+      const mark = new THREE.Mesh(new THREE.BoxGeometry(G.mark.w, t.height * G.mark.hFrac, G.mark.d), mat(SCN.mark));
+      mark.position.set(0, t.height / 2, G.mark.z);
       pivot.add(mark);
       pivot.rotation.y = THREE.MathUtils.degToRad(c.angle ?? 0);
       makeZone(c, parent, attachY);
@@ -1315,7 +1346,7 @@ function buildArm() {
 
     } else if (c.type === 'link') {
       const len = c.length ?? 1;
-      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1, 20), mat(t.color)));
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...GEOM.link.r, 1, 20), mat(t.color)));
       body.position.y = 0.5;
       const linkScale = new THREE.Group();
       linkScale.add(body);
@@ -1327,13 +1358,14 @@ function buildArm() {
       attachY = len;
 
     } else if (c.type === 'gripper') {
-      const palm = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.3), mat(SCN.joint)));
-      palm.position.y = 0.08;
+      const G = GEOM.gripper;
+      const palm = shadowed(new THREE.Mesh(new THREE.BoxGeometry(...G.palm), mat(SCN.joint)));
+      palm.position.y = G.palm[1] / 2;
       pivot.add(palm);
-      const fGeo = new THREE.BoxGeometry(0.09, 0.42, 0.16);
+      const fGeo = new THREE.BoxGeometry(...G.finger);
       const f1 = shadowed(new THREE.Mesh(fGeo, mat(t.color)));
       const f2 = shadowed(new THREE.Mesh(fGeo, mat(t.color)));
-      f1.position.y = f2.position.y = 0.16 + 0.21;
+      f1.position.y = f2.position.y = G.fingerY;
       pivot.add(f1, f2);
       c._fingers = [f1, f2];
       applyGripper(c);
@@ -1344,12 +1376,12 @@ function buildArm() {
     } else if (c.type === 'prismatic') {
       /* телескопический линейный привод: шток выдвигается вдоль оси */
       const L = c.length ?? 0.7;
-      const outer = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, L, 20), mat(t.color)));
+      const outer = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...GEOM.prismatic.body, L, 20), mat(t.color)));
       outer.position.y = L / 2;
       pivot.add(outer);
       /* шток той же длины: втянутый прячется в корпусе, выдвигается не дальше него */
       const rod = new THREE.Group();
-      const rodMesh = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, L, 16), mat(SCN.metal)));
+      const rodMesh = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(GEOM.prismatic.rod, GEOM.prismatic.rod, L, 16), mat(SCN.metal)));
       rodMesh.position.y = L / 2;
       rod.add(rodMesh);
       rod.position.y = Math.min(c.ext ?? 0.4, L);
@@ -1361,15 +1393,16 @@ function buildArm() {
 
     } else if (c.type === 'spherical') {
       /* шаровой шарнир: два вращения (yaw + pitch) в одном узле */
-      const socket = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.2, 24), mat(SCN.joint)));
-      socket.position.y = 0.1;
-      const ball = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 18), mat(t.color)));
-      ball.position.y = 0.32;
+      const G = GEOM.spherical;
+      const socket = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.socket.r, G.socket.h, 24), mat(SCN.joint)));
+      socket.position.y = G.socket.h / 2;
+      const ball = shadowed(new THREE.Mesh(new THREE.SphereGeometry(G.ball.r, 24, 18), mat(t.color)));
+      ball.position.y = G.ball.y;
       pivot.add(socket, ball);
-      const g1 = new THREE.Group(); g1.position.y = 0.32;
+      const g1 = new THREE.Group(); g1.position.y = G.ball.y;
       const g2 = new THREE.Group();
-      const stub = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 14), mat(SCN.metal)));
-      stub.position.y = 0.15;
+      const stub = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(G.stub.r, G.stub.r, G.stub.len, 14), mat(SCN.metal)));
+      stub.position.y = G.stub.len / 2;
       g2.add(stub);
       g1.add(g2);
       pivot.add(g1);
@@ -1378,88 +1411,92 @@ function buildArm() {
       c._g1 = g1; c._g2 = g2;
       makeZone(c, pivot, 0);
       parent = g2;
-      attachY = 0.3;
+      attachY = G.stub.len;
 
     } else if (c.type === 'offset') {
       /* Г-образный кронштейн: боковое смещение оси */
-      const len = c.length ?? 0.5;
-      const vert = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), mat(t.color)));
-      vert.position.y = 0.12;
-      const horiz = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, len + 0.1), mat(t.color)));
-      horiz.position.set(0, 0.2, len / 2);
+      const len = c.length ?? 0.5, G = GEOM.offset;
+      const vert = shadowed(new THREE.Mesh(new THREE.BoxGeometry(G.block, G.block, G.block), mat(t.color)));
+      vert.position.y = G.block / 2;
+      const horiz = shadowed(new THREE.Mesh(new THREE.BoxGeometry(G.arm.w, G.arm.h, len + G.arm.extra), mat(t.color)));
+      horiz.position.set(0, G.arm.y, len / 2);
       pivot.add(vert, horiz);
       const end = new THREE.Group();
-      end.position.set(0, 0.28, len);
+      end.position.set(0, G.endY, len);
       pivot.add(end);
       parent = end;
       attachY = 0;
 
     } else if (c.type === 'rail') {
       /* линейный рельс: каретка ездит вдоль X, несёт всё, что выше */
-      const track = shadowed(new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.12, 0.5), mat(SCN.joint)));
-      track.position.y = 0.06;
+      const G = GEOM.rail;
+      const track = shadowed(new THREE.Mesh(new THREE.BoxGeometry(...G.track), mat(SCN.joint)));
+      track.position.y = G.track[1] / 2;
       pivot.add(track);
       const car = new THREE.Group();
-      const carBody = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 0.58), mat(t.color)));
-      carBody.position.y = 0.21;
+      const carBody = shadowed(new THREE.Mesh(new THREE.BoxGeometry(...G.car), mat(t.color)));
+      carBody.position.y = G.carY;
       car.add(carBody);
       car.position.x = c.pos ?? 0;
       pivot.add(car);
       c._car = car;
       makeZone(c, pivot, 0);
       parent = car;
-      attachY = 0.3;
+      attachY = G.attach;
 
     } else if (c.type === 'suction') {
       /* вакуумная присоска: сила присоса сжимает манжету */
-      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.17, 0.16, 18), mat(SCN.joint)));
-      body.position.y = 0.08;
+      const G = GEOM.suction;
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.body.r, G.body.h, 18), mat(SCN.joint)));
+      body.position.y = G.body.h / 2;
       pivot.add(body);
-      const cup = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.2, 22), mat(t.color)));
+      const cup = shadowed(new THREE.Mesh(new THREE.ConeGeometry(G.cup.r, G.cup.h, 22), mat(t.color)));
       cup.rotation.x = Math.PI;
       pivot.add(cup);
       c._cup = cup;
       applySuction(c);
       parent = pivot;
-      attachY = 0.38;
+      attachY = G.attach;
 
     } else if (c.type === 'drill') {
       /* дрель: корпус + вращающееся сверло; скорость крутит группу _spin */
-      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.3, 20), mat(SCN.joint)));
-      body.position.y = 0.15;
+      const G = GEOM.drill;
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.body.r, G.body.h, 20), mat(SCN.joint)));
+      body.position.y = G.body.h / 2;
       pivot.add(body);
       const spin = new THREE.Group();
-      spin.position.y = 0.3;
-      const bit = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.02, 0.34, 10), mat(t.color)));
-      bit.position.y = 0.17;
-      const flute = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.02), mat(SCN.metal));
-      flute.position.y = 0.14;
+      spin.position.y = G.body.h;
+      const bit = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.bit.r, G.bit.len, 10), mat(t.color)));
+      bit.position.y = G.bit.len / 2;
+      const flute = new THREE.Mesh(new THREE.BoxGeometry(...G.flute), mat(SCN.metal));
+      flute.position.y = G.fluteY;
       spin.add(bit, flute);
       pivot.add(spin);
       c._spin = spin;
       parent = pivot;
-      attachY = 0.66;
+      attachY = G.attach;
 
     } else if (c.type === 'mill') {
       /* фреза: шток + вращающаяся шестерня с зубьями */
-      const stem = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.3, 14), mat(SCN.joint)));
-      stem.position.y = 0.15;
+      const G = GEOM.mill, T = G.teeth;
+      const stem = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(...G.stem.r, G.stem.h, 14), mat(SCN.joint)));
+      stem.position.y = G.stem.h / 2;
       pivot.add(stem);
       const spin = new THREE.Group();
-      spin.position.y = 0.34;
-      const disk = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.07, 24), mat(t.color)));
+      spin.position.y = G.spinY;
+      const disk = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(G.disk.r, G.disk.r, G.disk.h, 24), mat(t.color)));
       spin.add(disk);
-      for (let k = 0; k < 9; k++) {
-        const tooth = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), mat(t.color)));
-        const a = k / 9 * Math.PI * 2;
-        tooth.position.set(Math.cos(a) * 0.235, 0, Math.sin(a) * 0.235);
+      for (let k = 0; k < T.n; k++) {
+        const tooth = shadowed(new THREE.Mesh(new THREE.BoxGeometry(T.size, T.size, T.size), mat(t.color)));
+        const a = k / T.n * Math.PI * 2;
+        tooth.position.set(Math.cos(a) * T.r, 0, Math.sin(a) * T.r);
         tooth.rotation.y = -a;
         spin.add(tooth);
       }
       pivot.add(spin);
       c._spin = spin;
       parent = pivot;
-      attachY = 0.42;
+      attachY = G.attach;
     }
   }
   updateJSONView();
@@ -1469,12 +1506,12 @@ function buildArm() {
 }
 
 /* смещение пальца от оси по раскрытию (ширина пальца 0.09) */
-function gripGap(c) { return 0.05 + (c.open ?? 50) / 100 * 0.18; }
+function gripGap(c) { return GEOM.gripper.gap0 + (c.open ?? 50) / 100 * GEOM.gripper.gapRange; }
 
 function applyGripper(c) {
   let gap = gripGap(c);
   /* в режиме заданий пальцы упираются в удерживаемый кубик (c._holdSize) */
-  if (c._holdSize) gap = Math.max(gap, c._holdSize / 2 + 0.045);
+  if (c._holdSize) gap = Math.max(gap, c._holdSize / 2 + GEOM.gripper.finger[0] / 2);
   c._fingers[0].position.x = gap;
   c._fingers[1].position.x = -gap;
 }
@@ -1482,7 +1519,7 @@ function applyGripper(c) {
 function applySuction(c) {
   const squash = 1 - (c.power ?? 0) / 100 * 0.45;
   c._cup.scale.y = squash;
-  c._cup.position.y = 0.16 + 0.1 * squash;
+  c._cup.position.y = GEOM.suction.body.h + GEOM.suction.cup.h / 2 * squash;
 }
 
 /* Быстрое применение параметра без пересборки сцены;
@@ -2554,8 +2591,8 @@ function buildURDF() {
   const pose = [];   // текущие значения суставов — в комментарий-шапку
   let cur = { name: 'base_link', shapes: [] };
   nodes.push({ link: cur });
-  cur.shapes.push(uCyl(0.625, 0.25, [0, 0, 0.125], URDF_NEUTRAL));
-  let org = [0, 0, 0.25]; // точка крепления следующего компонента в осях cur
+  cur.shapes.push(uCyl(gAvgR(GEOM.base.r), GEOM.base.h, [0, 0, GEOM.base.h / 2], URDF_NEUTRAL));
+  let org = [0, 0, GEOM.base.h]; // точка крепления следующего компонента в осях cur
 
   /* Сустав + звено-потомок; дальше собираем в это новое звено */
   function joint(name, type, child, at, axis, lower, upper, effort, vel, mimic) {
@@ -2586,21 +2623,18 @@ function buildURDF() {
       const h = ty.height, p = ty.params[0];
       const L = joint(jn, 'revolute', ln, org, [0, 0, 1], uRad(p.min), uRad(p.max), 10, 2);
       pose.push([jn, uRad(c.angle ?? 0)]);
-      if (c.type === 'yaw') {
-        L.shapes.push(uCyl(0.37, h, [0, 0, h / 2], ty.color));
-        L.shapes.push(uBox([0.06, 0.42, h * 0.7], [0, -0.2, h / 2], URDF_MARK));
-      } else {
-        L.shapes.push(uCyl(0.26, h, [0, 0, h / 2], ty.color));
-        L.shapes.push(uBox([0.05, 0.3, h * 0.8], [0, -0.16, h / 2], URDF_MARK));
-      }
+      const G = GEOM[c.type], gm = G.mark;
+      L.shapes.push(uCyl(gAvgR(G.body), h, [0, 0, h / 2], ty.color));
+      L.shapes.push(uBox([gm.w, gm.d, h * gm.hFrac], [0, -gm.z, h / 2], URDF_MARK));
       org = [0, 0, h];
 
     } else if (c.type === 'pitch') {
       /* корпус-ось и крышки не вращаются — остаются на звене-родителе */
       const h = ty.height, p = ty.params[0], axleRPY = [0, Math.PI / 2, 0];
-      cur.shapes.push(uCyl(0.26, 0.62, uAdd(org, [0, 0, h / 2]), ty.color, axleRPY));
-      cur.shapes.push(uCyl(0.29, 0.07, uAdd(org, [0.33, 0, h / 2]), URDF_NEUTRAL, axleRPY));
-      cur.shapes.push(uCyl(0.29, 0.07, uAdd(org, [-0.33, 0, h / 2]), URDF_NEUTRAL, axleRPY));
+      const G = GEOM.pitch;
+      cur.shapes.push(uCyl(G.axle.r, G.axle.len, uAdd(org, [0, 0, h / 2]), ty.color, axleRPY));
+      cur.shapes.push(uCyl(G.cap.r, G.cap.w, uAdd(org, [G.cap.x, 0, h / 2]), URDF_NEUTRAL, axleRPY));
+      cur.shapes.push(uCyl(G.cap.r, G.cap.w, uAdd(org, [-G.cap.x, 0, h / 2]), URDF_NEUTRAL, axleRPY));
       joint(jn, 'revolute', ln, uAdd(org, [0, 0, h / 2]), [1, 0, 0], uRad(p.min), uRad(p.max), 10, 2);
       pose.push([jn, uRad(c.angle ?? 0)]);
       org = [0, 0, h / 2];
@@ -2608,94 +2642,98 @@ function buildURDF() {
     } else if (c.type === 'link') {
       /* звено — статика: отдельный сустав не нужен, форма идёт в текущее звено */
       const len = c.length ?? 1;
-      cur.shapes.push(uCyl(0.175, len, uAdd(org, [0, 0, len / 2]), ty.color));
+      cur.shapes.push(uCyl(gAvgR(GEOM.link.r), len, uAdd(org, [0, 0, len / 2]), ty.color));
       org = uAdd(org, [0, 0, len]);
 
     } else if (c.type === 'offset') {
-      const len = c.length ?? 0.5;
-      cur.shapes.push(uBox([0.24, 0.24, 0.24], uAdd(org, [0, 0, 0.12]), ty.color));
-      cur.shapes.push(uBox([0.2, len + 0.1, 0.16], uAdd(org, [0, -len / 2, 0.2]), ty.color));
-      org = uAdd(org, [0, -len, 0.28]);
+      const len = c.length ?? 0.5, G = GEOM.offset;
+      cur.shapes.push(uBox([G.block, G.block, G.block], uAdd(org, [0, 0, G.block / 2]), ty.color));
+      cur.shapes.push(uBox([G.arm.w, len + G.arm.extra, G.arm.h], uAdd(org, [0, -len / 2, G.arm.y]), ty.color));
+      org = uAdd(org, [0, -len, G.endY]);
 
     } else if (c.type === 'prismatic') {
       const p = ty.params.find(q => q.key === 'ext'), len = c.length ?? 0.7;
-      cur.shapes.push(uCyl(0.235, len, uAdd(org, [0, 0, len / 2]), ty.color));
+      cur.shapes.push(uCyl(gAvgR(GEOM.prismatic.body), len, uAdd(org, [0, 0, len / 2]), ty.color));
       const L = joint(jn, 'prismatic', ln, org, [0, 0, 1],
         p.min * URDF_SCALE, paramMax(c, p) * URDF_SCALE, 100, 0.5);
       pose.push([jn, Math.min(c.ext ?? p.def, len) * URDF_SCALE]);
-      L.shapes.push(uCyl(0.13, len, [0, 0, len / 2], URDF_NEUTRAL));
+      L.shapes.push(uCyl(GEOM.prismatic.rod, len, [0, 0, len / 2], URDF_NEUTRAL));
       org = [0, 0, len];
 
     } else if (c.type === 'spherical') {
       /* шарового сустава в URDF нет: два revolute + промежуточное звено */
-      const [pPitch, pYaw] = ty.params;
-      cur.shapes.push(uCyl(0.32, 0.2, uAdd(org, [0, 0, 0.1]), URDF_NEUTRAL));
-      cur.shapes.push(uSph(0.26, uAdd(org, [0, 0, 0.32]), ty.color));
+      const [pPitch, pYaw] = ty.params, G = GEOM.spherical;
+      cur.shapes.push(uCyl(gAvgR(G.socket.r), G.socket.h, uAdd(org, [0, 0, G.socket.h / 2]), URDF_NEUTRAL));
+      cur.shapes.push(uSph(G.ball.r, uAdd(org, [0, 0, G.ball.y]), ty.color));
       joint(`joint_${k}_ball_yaw`, 'revolute', `link_${k}_ball_yaw`,
-        uAdd(org, [0, 0, 0.32]), [0, 0, 1], uRad(pYaw.min), uRad(pYaw.max), 10, 2);
+        uAdd(org, [0, 0, G.ball.y]), [0, 0, 1], uRad(pYaw.min), uRad(pYaw.max), 10, 2);
       pose.push([`joint_${k}_ball_yaw`, uRad(c.yaw ?? 0)]);
       const L = joint(`joint_${k}_ball_pitch`, `revolute`, `link_${k}_ball`,
         [0, 0, 0], [1, 0, 0], uRad(pPitch.min), uRad(pPitch.max), 10, 2);
       pose.push([`joint_${k}_ball_pitch`, uRad(c.pitch ?? 0)]);
-      L.shapes.push(uCyl(0.09, 0.3, [0, 0, 0.15], URDF_NEUTRAL));
-      org = [0, 0, 0.3];
+      L.shapes.push(uCyl(G.stub.r, G.stub.len, [0, 0, G.stub.len / 2], URDF_NEUTRAL));
+      org = [0, 0, G.stub.len];
 
     } else if (c.type === 'rail') {
-      const p = ty.params[0];
-      cur.shapes.push(uBox([4.6, 0.5, 0.12], uAdd(org, [0, 0, 0.06]), URDF_NEUTRAL));
+      const p = ty.params[0], G = GEOM.rail;
+      cur.shapes.push(uBox([G.track[0], G.track[2], G.track[1]], uAdd(org, [0, 0, G.track[1] / 2]), URDF_NEUTRAL));
       const L = joint(jn, 'prismatic', ln, org, [1, 0, 0],
         p.min * URDF_SCALE, p.max * URDF_SCALE, 200, 0.5);
       pose.push([jn, (c.pos ?? 0) * URDF_SCALE]);
-      L.shapes.push(uBox([0.7, 0.58, 0.18], [0, 0, 0.21], ty.color));
-      org = [0, 0, 0.3];
+      L.shapes.push(uBox([G.car[0], G.car[2], G.car[1]], [0, 0, G.carY], ty.color));
+      org = [0, 0, G.attach];
 
     } else if (c.type === 'gripper') {
       /* пальцы — две призматические оси; правая повторяет левую через mimic */
-      const base = cur, at = org, gMin = 0.05, gMax = 0.23;
-      const gap = 0.05 + (c.open ?? 50) / 100 * 0.18;
-      cur.shapes.push(uBox([0.5, 0.3, 0.16], uAdd(org, [0, 0, 0.08]), URDF_NEUTRAL));
+      const base = cur, at = org, G = GEOM.gripper, gMin = G.gap0, gMax = G.gap0 + G.gapRange;
+      const gap = gripGap(c);
+      const finger = [G.finger[0], G.finger[2], G.finger[1]];
+      cur.shapes.push(uBox([G.palm[0], G.palm[2], G.palm[1]], uAdd(org, [0, 0, G.palm[1] / 2]), URDF_NEUTRAL));
       const lj = `joint_${k}_finger_left`;
       joint(lj, 'prismatic', `link_${k}_finger_left`, at, [1, 0, 0],
         gMin * URDF_SCALE, gMax * URDF_SCALE, 20, 0.05)
-        .shapes.push(uBox([0.09, 0.16, 0.42], [0, 0, 0.37], ty.color));
+        .shapes.push(uBox(finger, [0, 0, G.fingerY], ty.color));
       pose.push([lj, gap * URDF_SCALE]);
       cur = base;
       const rj = `joint_${k}_finger_right`;
       joint(rj, 'prismatic', `link_${k}_finger_right`, at, [-1, 0, 0],
         gMin * URDF_SCALE, gMax * URDF_SCALE, 20, 0.05, lj)
-        .shapes.push(uBox([0.09, 0.16, 0.42], [0, 0, 0.37], ty.color));
+        .shapes.push(uBox(finger, [0, 0, G.fingerY], ty.color));
       pose.push([rj, gap * URDF_SCALE]);
       cur = base;
       org = uAdd(at, [0, 0, ty.height]);
 
     } else if (c.type === 'suction') {
-      cur.shapes.push(uCyl(0.155, 0.16, uAdd(org, [0, 0, 0.08]), URDF_NEUTRAL));
+      const G = GEOM.suction;
+      cur.shapes.push(uCyl(gAvgR(G.body.r), G.body.h, uAdd(org, [0, 0, G.body.h / 2]), URDF_NEUTRAL));
       /* конуса в URDF нет — манжета приближена цилиндром (без учёта присоса) */
-      cur.shapes.push(uCyl(0.24, 0.2, uAdd(org, [0, 0, 0.26]), ty.color));
-      org = uAdd(org, [0, 0, 0.38]);
+      cur.shapes.push(uCyl(G.cup.r, G.cup.h, uAdd(org, [0, 0, G.body.h + G.cup.h / 2]), ty.color));
+      org = uAdd(org, [0, 0, G.attach]);
 
     } else if (c.type === 'drill' || c.type === 'mill') {
       /* шпиндель крутится без ограничений — continuous */
-      const base = cur, drill = c.type === 'drill';
-      const at = uAdd(org, [0, 0, drill ? 0.3 : 0.34]);
+      const base = cur, drill = c.type === 'drill', GD = GEOM.drill, GM = GEOM.mill;
+      const holder = drill ? GD.body : GM.stem; // корпус дрели / шток фрезы — до шпинделя
+      const at = uAdd(org, [0, 0, drill ? GD.body.h : GM.spinY]);
       const sj = `joint_${k}_spindle`;
-      cur.shapes.push(uCyl(drill ? 0.175 : 0.08, 0.3, uAdd(org, [0, 0, 0.15]), URDF_NEUTRAL));
+      cur.shapes.push(uCyl(gAvgR(holder.r), holder.h, uAdd(org, [0, 0, holder.h / 2]), URDF_NEUTRAL));
       const L = joint(sj, 'continuous', `link_${k}_${drill ? 'bit' : 'cutter'}`,
         at, [0, 0, 1], null, null, 3, 30);
       pose.push([sj, 0]);
       if (drill) {
-        L.shapes.push(uCyl(0.028, 0.34, [0, 0, 0.17], ty.color));
-        L.shapes.push(uBox([0.09, 0.02, 0.22], [0, 0, 0.14], URDF_NEUTRAL));
+        L.shapes.push(uCyl(gAvgR(GD.bit.r), GD.bit.len, [0, 0, GD.bit.len / 2], ty.color));
+        L.shapes.push(uBox([GD.flute[0], GD.flute[2], GD.flute[1]], [0, 0, GD.fluteY], URDF_NEUTRAL));
       } else {
-        L.shapes.push(uCyl(0.2, 0.07, [0, 0, 0], ty.color));
-        for (let q = 0; q < 9; q++) {
-          const a = q / 9 * Math.PI * 2;
-          L.shapes.push(uBox([0.07, 0.07, 0.07],
-            [Math.cos(a) * 0.235, -Math.sin(a) * 0.235, 0], ty.color, [0, 0, -a]));
+        const T = GM.teeth;
+        L.shapes.push(uCyl(GM.disk.r, GM.disk.h, [0, 0, 0], ty.color));
+        for (let q = 0; q < T.n; q++) {
+          const a = q / T.n * Math.PI * 2;
+          L.shapes.push(uBox([T.size, T.size, T.size],
+            [Math.cos(a) * T.r, -Math.sin(a) * T.r, 0], ty.color, [0, 0, -a]));
         }
       }
       cur = base;
-      org = uAdd(org, [0, 0, drill ? 0.66 : 0.42]);
+      org = uAdd(org, [0, 0, drill ? GD.attach : GM.attach]);
     }
   });
 
@@ -3034,9 +3072,9 @@ const CHAL = {
   pen:    { pos: [-1.0, 1.2], half: 0.25, wall: 0.03, height: 0.08, color: 0x35c26a },
   wall:   { x: -1.85, thick: 0.12, height: 1.2, width: 1.4, color: 0xcdbfa3, bore: 0x454a52,
             square: { y: 0.65, side: 0.5 }, tol: 0.075, maxHoles: 12 },
-  drill:  { r: 0.035, len: 0.34 },        // размеры сверла — из buildArm()
+  drill:  { r: GEOM.drill.bit.r[0], len: GEOM.drill.bit.len }, // из реестра GEOM
   billet: { pos: [-0.2, 1.5], r: 0.14, len: 0.8, voxel: 0.02, color: 0xaeb6c0, midTol: 4 },
-  mill:   { r: 0.28, halfThick: 0.045 },  // диск фрезы до вершин зубьев — из buildArm()
+  mill:   { r: GEOM.mill.cutR, halfThick: GEOM.mill.cutHalf },  // из реестра GEOM
   /* окно захвата в системе координат схвата: где должен быть центр кубика */
   grip:   { minY: 0.2, maxY: 0.62, maxX: 0.07, maxZ: 0.14, tol: 0.03 },
   g: 6,                                    // ускорение падения, ед/с²
@@ -3083,7 +3121,7 @@ function rayBox(o, d, min, max) {
 }
 
 /* просвет между пальцами схвата по текущему раскрытию */
-function gripInner(c) { return 2 * gripGap(c) - 0.09; }
+function gripInner(c) { return 2 * gripGap(c) - GEOM.gripper.finger[0]; }
 
 /* ---- Предметы, которые можно взять схватом (кубик, чушка): захват, удержание, гравитация ---- */
 
@@ -3145,7 +3183,7 @@ function holdSize(h) { return h.kind === 'cube' ? CHAL.cube.size : CHAL.billet.r
 function graspPoint(h, pivot) {
   if (h.kind === 'cube') return pivot.worldToLocal(h.obj.position.clone());
   const B = CHAL.billet, a = new THREE.Vector3(0, 0, 1).applyQuaternion(h.obj.quaternion);
-  const fingers = pivot.localToWorld(new THREE.Vector3(0, 0.37, 0));
+  const fingers = pivot.localToWorld(new THREE.Vector3(0, GEOM.gripper.fingerY, 0));
   const t = THREE.MathUtils.clamp(fingers.sub(h.obj.position).dot(a), -B.len / 2, B.len / 2);
   return pivot.worldToLocal(h.obj.position.clone().addScaledVector(a, t));
 }

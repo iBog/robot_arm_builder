@@ -1,0 +1,11 @@
+{
+  "name": "robo-arm-builder",
+  "private": true,
+  "description": "Скрипты разработки. Само приложение — один файл index.html без сборки и зависимостей.",
+  "type": "module",
+  "scripts": {
+    "check": "node tests/check.mjs",
+    "test": "node tests/check.mjs && node tests/run.mjs",
+    "test:fast": "node tests/check.mjs && node tests/run.mjs struct split build share golden"
+  }
+}
