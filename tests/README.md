@@ -9,6 +9,7 @@
 
 ```powershell
 node tests/check.mjs            # синтаксис JS-модуля (секунда)
+node tests/codec.test.mjs       # кодек ссылок, валидатор, schema.json — в node, без браузера (секунда)
 node tests/run.mjs              # все сценарии (~10 мин: солвер поз перебирает много рестартов)
 node tests/run.mjs struct split # только быстрые
 node tests/run.mjs golden --update   # перезаписать «золотой» снимок геометрии
@@ -39,3 +40,21 @@ three.js грузится с CDN. Артефакты — в `tests/out/` (в .gi
 
 Пустой 3D-холст на скриншоте при живом UI — известный артефакт headless-снимка,
 перезапустите; сценарии на него не опираются.
+
+## Чистые куски и schema.json
+
+Кодек ссылок, валидатор и реестр типов не трогают DOM и обёрнуты в `index.html`
+маркерами `/* @pure имя */ … /* @pure end */`. `tools/pure.mjs` вырезает их и
+выполняет в node, на этом построены `tests/codec.test.mjs` и генератор
+`tools/schema.mjs` (JSON Schema конфигурации руки → `schema.json`; после правки
+`TYPES` перегенерируйте, тест проверяет актуальность).
+
+## Отладочный API страницы
+
+Откройте `index.html?debug=1` — в `window.roboArm` появятся: `components`,
+`config()`, `setArm(cfg)`, `setParam(i, key, v)` (с ограничением пола),
+`tip()`, `minY()`, `tick(now)`, `state()`, `challenge.{start, stop, goto, reset, data}`,
+`share.{full, short, encode, decode, encodeStruct, decodeStruct}`, `setLang`,
+`setTheme`, а также `THREE`, `scene`, `camera`, `controls`, `renderer`. Этого
+хватает, чтобы агент или внешний скрипт управлял рукой из консоли, Playwright или
+расширения без инжекции кода в модуль.

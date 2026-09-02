@@ -52,7 +52,7 @@ for (const name of names) {
   const html = index.replace(anchor, () => 'renderPanel();\n' + inject + '\nif (fromLink) {');
   const file = path.join(outDir, `test_${name}.html`);
   fs.writeFileSync(file, html);
-  const url = pathToFileURL(file).href;
+  const url = pathToFileURL(file).href + (name === 'debug' ? '?debug=1' : ''); // сценарий debug проверяет API под флагом
   const base = ['--headless=new', '--disable-gpu', '--window-size=1600,1000', '--virtual-time-budget=12000'];
   const t0 = Date.now();
   const r = spawnSync(CHROME, [...base, '--dump-dom', url], { encoding: 'utf8', maxBuffer: 64 << 20, timeout: 300000 });

@@ -350,5 +350,19 @@ try {
     setArm([{ type: 'gripper', open: 60 }, { type: 'mill', speed: 10 }]);
     log(buildURDF());
   }
+  /* ---------- отладочный API страницы (?debug=1) ---------- */
+  if (SCEN === 'debug') {
+    const api = window.roboArm;
+    expect(!!api, 'window.roboArm есть под ?debug=1');
+    const cfg = api.setArm([{ type: 'yaw', angle: 10 }, { type: 'pitch', angle: 20 }, { type: 'link', length: 2.5 }, { type: 'gripper', open: 30 }]);
+    expect(cfg.length === 4 && api.components.length === 4, 'setArm вернул конфигурацию');
+    expect(api.setParam(1, 'angle', 120) < 115 && api.minY() >= -0.005, 'setParam с ограничением пола');
+    const st = api.state();
+    expect(st.version === VERSION && st.tip.length === 3 && st.challenge === null, 'state(): версия, tip, режим');
+    api.challenge.start(); api.tick(1000); api.tick(1016);
+    expect(api.state().challenge?.task === 0 && api.challenge.data.holdables.length === 1, 'challenge.start + tick');
+    api.challenge.stop();
+    expect(api.share.decode(api.share.encode(cfg)).length === 4 && api.share.short().includes('?s='), 'share.encode/decode/short');
+  }
 } catch (e) { log('EXCEPTION', e.message, e.stack); }
 flush();

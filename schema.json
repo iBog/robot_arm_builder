@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ibog.github.io/robot_arm_builder/schema.json",
+  "title": "Robo-Arm Builder arm configuration",
+  "description": "Chain of components from the base to the arm tip, as shown in the JSON tab and accepted by \"Apply\" and the ?config= link parameter. Missing parameters take their defaults; values are clamped to their ranges.",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "yaw",
+            "description": "Yaw / Поворот"
+          },
+          "angle": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Angle, ° / Угол, °"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "rail",
+            "description": "Rail / Рельс"
+          },
+          "pos": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2,
+            "multipleOf": 0.05,
+            "default": 0,
+            "description": "Position / Позиция"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "pitch",
+            "description": "Pitch / Наклон"
+          },
+          "angle": {
+            "type": "number",
+            "minimum": -120,
+            "maximum": 120,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Angle, ° / Угол, °"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "roll",
+            "description": "Roll / Вращение"
+          },
+          "angle": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Angle, ° / Угол, °"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "spherical",
+            "description": "Ball joint / Шаровой шарнир"
+          },
+          "pitch": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Pitch, ° / Наклон, °"
+          },
+          "yaw": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Yaw, ° / Поворот, °"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "prismatic",
+            "description": "Prismatic / Телескоп"
+          },
+          "length": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 2,
+            "multipleOf": 0.05,
+            "default": 0.7,
+            "description": "Length / Длина; build-time size, editable only while the component is last in the chain"
+          },
+          "ext": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "multipleOf": 0.05,
+            "default": 0.4,
+            "description": "Extension / Выдвижение; must not exceed \"length\""
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "link",
+            "description": "Link / Звено"
+          },
+          "length": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 3,
+            "multipleOf": 0.05,
+            "default": 1,
+            "description": "Length / Длина; build-time size, editable only while the component is last in the chain"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "offset",
+            "description": "Offset / Кронштейн"
+          },
+          "length": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 1.5,
+            "multipleOf": 0.05,
+            "default": 0.5,
+            "description": "Length / Длина; build-time size, editable only while the component is last in the chain"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "gripper",
+            "description": "Gripper / Схват"
+          },
+          "open": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "multipleOf": 1,
+            "default": 50,
+            "description": "Opening, % / Раскрытие, %"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "suction",
+            "description": "Suction cup / Присоска"
+          },
+          "power": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Suction, % / Присос, %"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "drill",
+            "description": "Drill / Сверло"
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Speed, % / Обороты, %"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "mill",
+            "description": "Mill / Фреза"
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "multipleOf": 1,
+            "default": 0,
+            "description": "Speed, % / Обороты, %"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  }
+}

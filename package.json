@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "check": "node tests/check.mjs",
-    "test": "node tests/check.mjs && node tests/run.mjs",
-    "test:fast": "node tests/check.mjs && node tests/run.mjs struct split build share golden",
+    "test:codec": "node tests/codec.test.mjs",
+    "test:fast": "node tests/check.mjs && node tests/codec.test.mjs && node tests/run.mjs struct split build share golden",
+    "test": "node tests/check.mjs && node tests/codec.test.mjs && node tests/run.mjs",
+    "schema": "node tools/schema.mjs",
     "release": "node tools/release.mjs"
   },
   "version": "1.7.0"

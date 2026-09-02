@@ -870,6 +870,7 @@ document.documentElement.dataset.theme = theme; // до отрисовки, чт
    движение (поворот, рельс, суставы) → структура (звено, кронштейн) →
    наконечники в конце (сборка идёт от основания, они нужны последними).
    Порядок НЕ влияет на коды ссылок — code застолблен за типом навсегда. */
+/* @pure types */
 const TYPES = {
   /* --- движение --- */
   yaw: {
@@ -1004,6 +1005,7 @@ const GEOM = {
 };
 /* средний радиус усечённого цилиндра — для URDF, где конуса нет */
 const gAvgR = r => (r[0] + r[1]) / 2;
+/* @pure end */
 
 /* ---- SVG-иконки компонентов: единый линейный стиль ---- */
 const ICONS = {
@@ -1163,6 +1165,13 @@ const armRoot = new THREE.Group();
 scene.add(armRoot);
 /* pivots[i] — группа, чьё вращение/размер управляется слайдером компонента i */
 let pivots = [];
+/* конец цепочки: узел и высота в нём, куда крепился бы следующий компонент */
+let tipNode = null, tipY = 0;
+function armTip(out = new THREE.Vector3()) {
+  if (!tipNode) return out.set(0, 0, 0);
+  tipNode.updateWorldMatrix(true, false);
+  return tipNode.localToWorld(out.set(0, tipY, 0));
+}
 
 function mat(color) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.35 });
@@ -1509,6 +1518,7 @@ function buildArm() {
       attachY = G.attach;
     }
   }
+  tipNode = parent; tipY = attachY;
   updateJSONView();
   updateURDFView();
   updateBOM();
@@ -2126,8 +2136,9 @@ function updateBOM() {
 const jsonText = document.getElementById('jsonText');
 const jsonStatus = document.getElementById('jsonStatus');
 
-function cleanConfig() {
-  return components.map(c => {
+/* @pure config */
+function cleanConfig(list = components) {
+  return list.map(c => {
     const out = { type: c.type };
     for (const p of TYPES[c.type].params) {
       const v = c[p.key] ?? p.def;
@@ -2137,6 +2148,7 @@ function cleanConfig() {
     return out;
   });
 }
+/* @pure end */
 
 function updateJSONView() {
   if (document.activeElement === jsonText) return; // не мешаем ручному редактированию
@@ -2151,6 +2163,7 @@ function flashStatus(el, text, cls) {
 
 function setStatus(text, cls) { flashStatus(jsonStatus, text, cls); }
 
+/* @pure validate */
 /* Валидация конфигурации (Apply и ?config= из URL): неизвестный тип — ошибка,
    значения зажимаются в min/max, пропущенные параметры добираются из def */
 function validateConfig(data) {
@@ -2165,6 +2178,7 @@ function validateConfig(data) {
   }
   return data;
 }
+/* @pure end */
 
 document.getElementById('btnApply').onclick = () => {
   try {
@@ -2208,6 +2222,7 @@ document.getElementById('btnCopy').onclick = async () => {
   if (await copyText(jsonText.value)) setStatus(t('copied'), 'ok');
 };
 
+/* @pure codec */
 /* ---- Цифровой код руки: любой конфигурации соответствует число ----
    Формат (версия 1): первая цифра — версия, дальше на каждый компонент
    цифра-код типа (TYPES[*].code) и его параметры фиксированной ширины,
@@ -2283,8 +2298,7 @@ function codeVersionFor(list) {
   return list.some(c => TYPES[c.type].code > 9) ? '2' : '1';
 }
 
-function encodeArmCode() {
-  const cfg = cleanConfig();
+function encodeArmCode(cfg = cleanConfig()) {
   const ver = codeVersionFor(cfg);
   const tw = CODE_VERSIONS[ver];
   let s = ver;
@@ -2412,8 +2426,7 @@ function decodeStructCode(str) {
 }
 
 /* короткий код: типы + габариты (длины), позы — по умолчанию */
-function encodeStructCode() {
-  const cfg = cleanConfig();
+function encodeStructCode(cfg = cleanConfig()) {
   const ver = cfg.some(c => TYPES[c.type].code > 9) ? '5' : '4';
   const tw = CODE_VERSIONS[ver];
   let s = ver;
@@ -2433,6 +2446,7 @@ function encodeStructCode() {
 function groupCode(code) {
   return code.replace(/(\d{4})(?=\d)/g, '$1-');
 }
+/* @pure end */
 
 /* ---- Ссылка на текущую конфигурацию: цифровой код в параметре ?c= ---- */
 
@@ -4210,6 +4224,30 @@ syncAnimToggle();
 syncFitToggle();
 checkCodeSpec(); // формат ссылок не должен разъезжаться с TYPES
 checkGeomSpec(); // размеры деталей согласованы между собой и с заданиями
+
+/* Отладочный API страницы под ?debug=1 (window.roboArm): агенты, внешние скрипты
+   и тесты управляют рукой без инжекции кода в модуль. Состав — в tests/README.md. */
+if (urlParam('debug') !== null) {
+  window.roboArm = {
+    get components() { return components; },
+    get pivots() { return pivots; },
+    config: () => cleanConfig(),
+    setArm(cfg) { components = validateConfig(clone(cfg)); buildArm(); renderPanel(); return cleanConfig(); },
+    setParam(i, key, v) { const c = components[i]; const acc = setParamChecked(c, key, v); syncSlider(c, key); return acc; },
+    tip: () => armTip().toArray(),
+    minY: () => armMinY(),
+    tick(now) { if (chal) challengeTick(now); },
+    state: () => ({
+      version: VERSION, lang, theme, components: cleanConfig(), tip: armTip().toArray(), minY: armMinY(),
+      challenge: chal ? { task: chal.task, done: [...chal.done], held: chal.held?.h.kind ?? null,
+                          log: chal.log.length, replaying: !!chal.replay } : null,
+    }),
+    challenge: { start: startChallenge, stop: stopChallenge, goto: gotoTask, reset: resetTask, get data() { return chal; } },
+    share: { full: shareURL, short: structShareURL, encode: encodeArmCode, decode: decodeArmCode,
+             encodeStruct: encodeStructCode, decodeStruct: decodeStructCode },
+    setLang, setTheme, THREE, scene, camera, controls, renderer,
+  };
+}
 const fromLink = loadFromURL(); // рука из ссылки — раньше первой сборки
 buildArm();
 renderPanel();
