@@ -674,8 +674,8 @@ const STR = {
   applied:    { en: '✓ applied',                      ru: '✓ применено' },
   copied:     { en: '✓ copied',                       ru: '✓ скопировано' },
   share:      { en: '🔗 Share',                       ru: '🔗 Ссылка' },
-  shareTip:   { en: 'Copy a short link with the arm structure (default poses and sizes). Long press — a full link with the exact poses and sizes',
-                ru: 'Скопировать короткую ссылку с составом руки (позы и размеры по умолчанию). Долгое нажатие — полная ссылка с точными позами и размерами' },
+  shareTip:   { en: 'Copy a short link with the arm structure and sizes (default poses). Long press — a full link with the exact poses too',
+                ru: 'Скопировать короткую ссылку с составом и размерами руки (позы по умолчанию). Долгое нажатие — полная ссылка ещё и с точными позами' },
   shareCopied:{ en: '✓ full link copied',             ru: '✓ полная ссылка скопирована' },
   shortCopied:{ en: '✓ short link copied',            ru: '✓ короткая ссылка скопирована' },
   undo:       { en: '↩️ Undo',                        ru: '↩️ Отмена' },
@@ -2164,7 +2164,11 @@ document.getElementById('btnCopy').onclick = async () => {
    (00–99, для новых типов с кодами 10+), 3 — как 2, но у телескопа два параметра
    (length и ext до 2). Энкодер выбирает минимально достаточную версию, декодер
    читает все. */
-const CODE_VERSIONS = { 1: 1, 2: 2, 3: 2 }; // версия → ширина кода типа в цифрах
+const CODE_VERSIONS = { 1: 1, 2: 2, 3: 2, 4: 1, 5: 2 }; // версия → ширина кода типа в цифрах
+/* 4 и 5 — структурный код с габаритами (?s=): типы + build-параметры (длины),
+   позы по умолчанию; 4 — типы одной цифрой, 5 — двумя. Версии 1–3 в ?s= —
+   старые структурные коды без размеров. */
+const STRUCT_SIZED = { 4: true, 5: true };
 
 /* параметры типов в старых версиях (заморожены): в v1/v2 у телескопа был только ext */
 const LEGACY_PARAMS = {
@@ -2291,7 +2295,7 @@ function checkCodeSpec() {
 /* полный код (типы + параметры) → массив компонентов; null, если код битый */
 function decodeArmCode(str) {
   const parsed = codeBody(str);
-  if (parsed === null) return null;
+  if (parsed === null || STRUCT_SIZED[parsed.ver]) return null; // структурный код — не сюда
   const { ver, tw, body: d } = parsed;
   const out = [];
   let i = 0;
@@ -2327,24 +2331,46 @@ function midParam(p) {
 function decodeStructCode(str) {
   const parsed = codeBody(str);
   if (parsed === null) return null;
-  const { tw, body: d } = parsed;
-  if (d.length % tw) return null;
+  const { ver, tw, body: d } = parsed;
+  const sized = !!STRUCT_SIZED[ver];
   const out = [];
-  for (let i = 0; i < d.length; i += tw) {
+  let i = 0;
+  while (i < d.length) {
+    if (i + tw > d.length) return null;
     const type = CODE_TO_TYPE[String(parseInt(d.slice(i, i + tw), 10))];
+    i += tw;
     if (!type) return null;
     const c = { type };
-    for (const p of TYPES[type].params) c[p.key] = midParam(p);
+    for (const p of codecParams(type, ver)) {
+      if (sized && p.build) {
+        /* габарит записан в коде */
+        const w = paramDigits(p);
+        if (i + w > d.length) return null;
+        const idx = Math.min(parseInt(d.slice(i, i + w), 10), Math.round((p.max - p.min) / p.step));
+        i += w;
+        c[p.key] = +(p.min + idx * p.step).toFixed(2);
+      } else c[p.key] = sized ? p.def : midParam(p); // позы: по умолчанию (старые коды — середина диапазона)
+    }
     out.push(c);
   }
   return out;
 }
 
+/* короткий код: типы + габариты (длины), позы — по умолчанию */
 function encodeStructCode() {
-  const ver = codeVersionFor(components);
+  const cfg = cleanConfig();
+  const ver = cfg.some(c => TYPES[c.type].code > 9) ? '5' : '4';
   const tw = CODE_VERSIONS[ver];
   let s = ver;
-  for (const c of components) s += String(TYPES[c.type].code).padStart(tw, '0');
+  for (const c of cfg) {
+    const ty = TYPES[c.type];
+    s += String(ty.code).padStart(tw, '0');
+    for (const p of ty.params) {
+      if (!p.build) continue;
+      const v = Math.min(p.max, Math.max(p.min, c[p.key] ?? p.def));
+      s += String(Math.round((v - p.min) / p.step)).padStart(paramDigits(p), '0');
+    }
+  }
   return s + dammDigit(s);
 }
 
