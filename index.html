@@ -1111,6 +1111,7 @@ viewport.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.copy(CAM_HOME.target);
 controls.enableDamping = true;
+controls.addEventListener('change', () => invalidate());
 
 const hemi = new THREE.HemisphereLight(SCN.hemiSky, SCN.hemiGround, SCN.hemiInt);
 scene.add(hemi);
@@ -1138,7 +1139,15 @@ function makeGrid() {
 let grid = makeGrid();
 scene.add(grid);
 
+/* Рендер только когда есть что показать: движение камеры, анимация, задания,
+   вращающиеся шпиндели или явная пометка invalidate() после любого изменения
+   сцены. Иначе цикл крутится вхолостую — на телефонах это батарея. Несколько
+   кадров подряд, чтобы дорисовались тени и затухание камеры. */
+let renderPending = 3;
+function invalidate() { renderPending = 3; }
+
 function resize() {
+  invalidate();
   const w = viewport.clientWidth, h = viewport.clientHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -1282,6 +1291,7 @@ function makeZone(c, holder, attachY) {
 function buildArm() {
   armRoot.clear();
   pivots = [];
+  capsFrame = null; // капсулы столкновений пересчитать
 
   /* Неподвижное основание */
   const base = new THREE.Group();
@@ -1502,6 +1512,7 @@ function buildArm() {
   updateJSONView();
   updateURDFView();
   updateBOM();
+  invalidate();
   if (components.length) startHint.hidden = true; // рука уже не пуста
 }
 
@@ -1546,6 +1557,7 @@ function applyParam3D(c, key) {
     /* длина меняет положение потомков — проще пересобрать */
     return false;
   }
+  invalidate();
   return true;
 }
 
@@ -1615,6 +1627,7 @@ function renderPanel() {
       zoneToggle.onchange = () => {
         c.showZone = zoneToggle.checked;
         if (c._zone) c._zone.visible = zoneToggle.checked;
+        invalidate();
       };
       zoneLbl.appendChild(zoneToggle);
       zoneLbl.appendChild(document.createTextNode(t('zone')));
@@ -1731,10 +1744,11 @@ function boundsSphere(roots) {
 /* ограничивающая сфера видимой части руки */
 function armSphere() { return boundsSphere([armRoot]); }
 
-/* плавно отодвигает камеру, если рука вылезает за кадр (только наружу) */
+/* плавно отодвигает камеру, если рука вылезает за кадр (только наружу);
+   возвращает true, если камера сдвинулась */
 function cameraAutoExpand() {
   const s = armSphere();
-  if (!s) return;
+  if (!s) return false;
   camera.updateMatrixWorld();
   _projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   _frustum.setFromProjectionMatrix(_projScreen);
@@ -1744,10 +1758,12 @@ function cameraAutoExpand() {
       const dist = dir.length();
       if (dist < 80) {
         camera.position.copy(controls.target).addScaledVector(dir.normalize(), dist * 1.03);
+        return true;
       }
-      return;
+      return false;
     }
   }
+  return false;
 }
 
 /* полный сброс кадра под текущую руку (после генерации) */
@@ -1755,6 +1771,7 @@ function fitCameraToArm() { fitCameraToSphere(armSphere()); }
 
 function fitCameraToSphere(s) {
   if (!s) return;
+  invalidate();
   const vHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
   const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
   const needed = s.radius * 1.15 / Math.sin(Math.min(vHalf, hHalf));
@@ -1830,6 +1847,7 @@ function newProject() {
   withLog(() => { components = []; buildArm(); renderPanel(); });
   camera.position.copy(CAM_HOME.pos);
   controls.target.copy(CAM_HOME.target);
+  invalidate();
   showStartHint();
 }
 
@@ -3021,6 +3039,7 @@ function startTutorial() {
   renderPanel();
   camera.position.copy(CAM_HOME.pos);
   controls.target.copy(CAM_HOME.target);
+  invalidate();
   startHint.hidden = true; // ведём своей подсказкой, стартовая не нужна
   tutStep = 0;
   showTutStep();
@@ -3080,6 +3099,38 @@ const CHAL = {
   g: 6,                                    // ускорение падения, ед/с²
 };
 const CHAL_TOOLS = ['gripper', 'drill', 'mill']; // нужный наконечник для каждого задания
+
+/* Самопроверка реестра геометрии — в духе checkCodeSpec(): у каждого типа есть
+   запись, размеры положительны и согласованы между собой и с заданиями.
+   При старте ругается в консоль; тесты зовут напрямую. */
+function checkGeomSpec() {
+  const errors = [], G = GEOM;
+  const pos = (v, what) => { if (!(v > 0)) errors.push(`${what}: ожидается > 0, есть ${v}`); };
+  for (const type of Object.keys(TYPES)) if (!G[type]) errors.push(`нет GEOM.${type}`);
+  for (const k of ['yaw', 'pitch', 'roll', 'gripper']) pos(TYPES[k].height, `TYPES.${k}.height`);
+  pos(G.base.h, 'base.h');
+  for (const k of ['yaw', 'roll']) { pos(G[k].body[0], k + '.body'); pos(G[k].mark.hFrac, k + '.mark.hFrac'); }
+  if (G.pitch.cap.x - G.pitch.cap.w / 2 > G.pitch.axle.len / 2) errors.push('pitch: крышки не касаются оси');
+  for (const k of ['rail', 'suction', 'drill', 'mill']) pos(G[k].attach, k + '.attach');
+  const g = G.gripper;
+  if (2 * g.gap0 <= g.finger[0]) errors.push('gripper: сомкнутые пальцы пересекаются');
+  if (g.fingerY - g.finger[1] / 2 < g.palm[1]) errors.push('gripper: пальцы врезаются в ладонь');
+  if (TYPES.gripper.height < g.fingerY) errors.push('gripper: точка крепления ниже пальцев');
+  if (2 * (g.gap0 + g.gapRange) - g.finger[0] < CHAL.cube.size + CHAL.grip.tol) errors.push('gripper: кубик задания не проходит между пальцами');
+  if (CHAL.grip.minY > g.fingerY || CHAL.grip.maxY < g.fingerY) errors.push('CHAL.grip: окно захвата не накрывает пальцы');
+  if (G.mill.cutR < G.mill.teeth.r + G.mill.teeth.size / 2) errors.push('mill.cutR меньше вершин зубьев');
+  if (G.mill.cutHalf < G.mill.disk.h / 2) errors.push('mill.cutHalf тоньше диска');
+  if (G.mill.attach < G.mill.spinY + G.mill.disk.h / 2) errors.push('mill: диск выше точки крепления');
+  if (G.mill.spinY < G.mill.stem.h) errors.push('mill: диск внутри штока');
+  if (G.drill.bit.len > G.drill.attach - G.drill.body.h) errors.push('drill: сверло длиннее вылета');
+  if (G.drill.fluteY + G.drill.flute[1] / 2 > G.drill.bit.len) errors.push('drill: канавка длиннее сверла');
+  if (G.suction.attach < G.suction.body.h + G.suction.cup.h) errors.push('suction: манжета выше точки крепления');
+  if (G.spherical.ball.y < G.spherical.socket.h) errors.push('spherical: шар внутри чашки');
+  if (G.rail.attach < G.rail.carY + G.rail.car[1] / 2) errors.push('rail: каретка выше точки крепления');
+  if (G.offset.endY < G.offset.arm.y + G.offset.arm.h / 2) errors.push('offset: конец кронштейна ниже полки');
+  for (const e of errors) console.error(`Robo-Arm GEOM нарушен: ${e}`);
+  return !errors.length;
+}
 
 let chal = null;
 const btnChal = document.getElementById('btnChal');
@@ -3230,12 +3281,21 @@ function segSegClosest(p1, q1, p2, q2, c1, c2) {
 }
 
 /* капсулы (отрезок + радиус) всех деталей руки в мире, по параметрам их геометрий;
-   skip — группы, чьи детали не учитываются (пальцы схвата вокруг предмета, диск фрезы) */
+   skip — группы, чьи детали не учитываются (пальцы схвата вокруг предмета, диск фрезы).
+   Считаются один раз за кадр (ключ — время тика), каждая помнит своих предков,
+   чтобы фильтр по skip обходился без пересчёта; buildArm() сбрасывает кеш. */
+let capsFrame = null, capsCache = [];
 function armCapsules(skip) {
+  const key = chal ? chal.lastNow : null;
+  if (key === null || key !== capsFrame) { capsCache = buildCapsules(); capsFrame = key; }
+  return skip.size ? capsCache.filter(c => !c.anc.some(a => skip.has(a))) : capsCache;
+}
+function buildCapsules() {
   const caps = [];
   armRoot.traverseVisible(o => {
     if (!o.isMesh || !o.geometry?.parameters) return;
-    for (let p = o.parent; p && p !== armRoot; p = p.parent) if (skip.has(p)) return;
+    const anc = [];
+    for (let p = o.parent; p && p !== armRoot; p = p.parent) anc.push(p);
     const g = o.geometry, p = g.parameters;
     let ax = 1, half = 0, r;
     if (g.type === 'CylinderGeometry' || g.type === 'ConeGeometry') {
@@ -3253,7 +3313,7 @@ function armCapsules(skip) {
     o.localToWorld(a); o.localToWorld(b);
     /* радиус масштабируется поперечными осями (звено растянуто только вдоль оси) */
     const el = o.matrixWorld.elements, sc = [Math.hypot(el[0], el[1], el[2]), Math.hypot(el[4], el[5], el[6]), Math.hypot(el[8], el[9], el[10])];
-    caps.push({ a, b, r: r * Math.max(...sc.filter((_, i) => i !== ax)) });
+    caps.push({ a, b, r: r * Math.max(...sc.filter((_, i) => i !== ax)), anc });
   });
   return caps;
 }
@@ -3735,6 +3795,7 @@ function stopChallenge() {
   stopReplay();
   clearTask();
   chal = null;
+  invalidate();
   document.body.classList.remove('challenge');
   btnChal.classList.remove('on');
   chalPanel.hidden = true;
@@ -4054,6 +4115,7 @@ function applyTheme() {
   for (const b of document.querySelectorAll('#themeSw button')) {
     b.classList.toggle('active', b.dataset.theme === theme);
   }
+  invalidate();
 }
 
 function setTheme(th) {
@@ -4146,7 +4208,8 @@ applyI18n();
 applyTheme();
 syncAnimToggle();
 syncFitToggle();
-checkCodeSpec(); // формат ссылок v1 не должен разъезжаться с TYPES
+checkCodeSpec(); // формат ссылок не должен разъезжаться с TYPES
+checkGeomSpec(); // размеры деталей согласованы между собой и с заданиями
 const fromLink = loadFromURL(); // рука из ссылки — раньше первой сборки
 buildArm();
 renderPanel();
@@ -4156,14 +4219,18 @@ if (fromLink) {
 } else if (badLink) showBadLink(); // код был, но битый: пустая рука + предупреждение
 
 renderer.setAnimationLoop((now) => {
+  /* «живая» сцена: анимация, задания или вращающийся шпиндель — рисуем каждый кадр */
+  const live = chkAnimate.checked || !!chal || components.some(c => c._spin && (c.speed ?? 0) > 0);
   if (chkAnimate.checked) animateArm(now);
   /* шпиндели сверла/фрезы крутятся всегда, пропорционально оборотам */
   for (const c of components) {
     if (c._spin) c._spin.rotation.y += (c.speed ?? 0) * 0.004;
   }
   if (chal) challengeTick(now);
-  controls.update();
-  if (chkFit.checked) cameraAutoExpand();
+  const moved = controls.update(); // true, пока камера движется (в том числе затухание)
+  if (chkFit.checked && cameraAutoExpand()) invalidate();
+  if (!live && !moved && renderPending <= 0) return; // ничего не изменилось — кадр пропускаем
+  if (renderPending > 0) renderPending--;
   updateFog();
   renderer.render(scene, camera);
 });

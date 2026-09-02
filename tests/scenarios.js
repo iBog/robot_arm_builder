@@ -278,6 +278,7 @@ try {
   /* ---------- сборка: кодек v3, блокировка длин, зависимые границы ---------- */
   if (SCEN === 'build') {
     expect(checkCodeSpec(), 'CODE_SPEC совпадает с TYPES');
+    expect(checkGeomSpec(), 'GEOM согласован (см. консоль при провале)');
     setArm([{ type: 'yaw', angle: 10 }, { type: 'prismatic', length: 1.0, ext: 0.6 }, { type: 'gripper', open: 50 }]);
     const code = encodeArmCode();
     expect(code[0] === '3' && JSON.stringify(decodeArmCode(code)) === JSON.stringify(cleanConfig()), 'полный код v3 туда-обратно: ' + code);
