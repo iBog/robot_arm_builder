@@ -47,6 +47,23 @@ but needs a linear rail and one more motor.
 - **Animate** — smooth sinusoidal motion of every joint, toggled in the top-left corner of the
   3D view.
 - **Auto camera** — the camera pulls back on its own if the arm grows out of frame.
+- **🎯 Inverse kinematics** — switch on *IK* and drag the target at the arm tip: the joints follow.
+  A target the arm cannot reach stays red with the missing distance and a hint to rebuild the
+  arm (a longer link, another joint, a telescope); as soon as the rebuilt arm reaches it, the
+  target is accepted automatically.
+- **🏆 Challenge mode** — three tasks for the arm you built, started from the bottom-left button:
+  pick up a cube and set it inside a ring, then lift it over the walls of a square; drill the four
+  corners marked on a wall; cut a billet in half with the mill. Objects can be grasped, they fall,
+  and any part of the arm pushes them; the drill cuts only along its axis, the mill only in its
+  plane, and the arm stops at the floor. Every action is recorded: undo the last one, or replay the
+  whole sequence — once or in a loop — with the physics running for real.
+- **Floor** — the arm and its tool stop at the floor; the auto-animation bounces back from it.
+- **Sizes at build time** — the length of a link, a bracket or a telescope body is set while the
+  component is the last in the chain and locked once the next one is attached; motion comes from
+  joints and the telescope's extension, not from stretching parts.
+- **🔗 Share links** — a click on *Share* copies a short link with the arm's structure and sizes
+  (easy to remember and dictate); a long press copies the full link with the exact pose as well.
+  `?lang=en|ru` and `?theme=dark|light` in a link pick the interface language and theme.
 - **🛒 BOM (shopping list)** — a bill of materials computed from the current arm, grouped by the
   component each part belongs to, with a subtotal per group and swappable alternatives for the
   common parts. Above the table is the arm's name in standard nomenclature
@@ -74,14 +91,18 @@ CDN (jsdelivr).
 | `pitch` | Hinge joint: swings the arm up and down | `angle` | −120…120° |
 | `roll` | Rotation around the arm's own axis | `angle` | −180…180° |
 | `link` | Rigid segment between joints | `length` | 0.3…3 |
-| `prismatic` | Telescopic linear actuator | `ext` | 0…1.2 |
+| `prismatic` | Telescopic linear actuator | `length`, `ext` | 0.3…2, 0…length |
 | `spherical` | Ball joint: two axes in one node | `pitch`, `yaw` | −90…90°, −180…180° |
 | `offset` | L-bracket: sideways offset of the axis | `length` | 0.2…1.5 |
 | `rail` | Linear rail: the carriage carries everything above it | `pos` | −2…2 |
 | `gripper` | Two-finger gripper | `open` | 0…100% |
 | `suction` | Vacuum suction cup | `power` | 0…100% |
+| `drill` | Drill: spindle with a bit | `speed` | 0…100% |
+| `mill` | Mill: spindle with a toothed disc | `speed` | 0…100% |
 
-Components are added in order from the base towards the tip of the arm.
+Components are added in order from the base towards the tip of the arm. `length` parameters are
+build-time sizes: editable only while the component is the last one. The machine-readable form of
+this table is [`schema.json`](schema.json) (JSON Schema, generated from the type registry).
 
 ## JSON format
 
@@ -120,6 +141,23 @@ built from primitives (cylinders, boxes, spheres), so there are no external mesh
   numbers from the parts in the BOM before doing dynamics.
 - **Pose.** URDF describes a model, not a pose, so the current slider values are listed in the
   header comment — copy them into a `joint_states` message if you need this exact posture.
+
+## For developers
+
+The whole app is one file, `index.html`, with no build step — keep it that way. Node is only
+needed for the checks:
+
+```
+node tests/check.mjs          # syntax of the JS module
+node tests/codec.test.mjs     # link codec, validator and schema.json — in node, no browser
+node tests/run.mjs            # headless-Chrome scenarios: challenge physics, IK, replay, links…
+node tools/release.mjs X.Y.Z  # version into index.html, CHANGELOG section, git tag
+```
+
+Open `index.html?debug=1` to get `window.roboArm` — a small API (`setArm`, `setParam`, `tick`,
+`state`, `challenge`, `share`…) for driving the page from the console, Playwright or an agent.
+See [`tests/README.md`](tests/README.md), [`CODEC.md`](CODEC.md) for the link format and
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## About the shopping list
 

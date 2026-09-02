@@ -5,6 +5,11 @@
 
 ## 1. Пошаговые сценарии движения робота
 
+> ✅ Частично в v1.7.0: в режиме заданий ведётся запись действий с отменой
+> последнего и повтором (однократным или по кругу) — это основа сценариев.
+> Осталось: именованные шаги с длительностями, вкладка вне режима заданий,
+> сценарий в ссылке (`?m=`), экспорт в G-code-подобный формат.
+
 Редактор последовательностей движений собранной руки.
 
 - Сценарий — список шагов; каждый шаг задаёт целевые значения параметров
@@ -46,6 +51,11 @@ version numbers; the order roughly reflects priority.
 
 ## 1. Step-by-step robot motion scenarios
 
+> ✅ Partly in v1.7.0: challenge mode records every action with undo of the
+> last one and replay (once or looped) — the foundation of scenarios. Still
+> to do: named steps with durations, a tab outside challenge mode, the
+> scenario in the link (`?m=`), export to a G-code-like format.
+
 A motion-sequence editor for the assembled arm.
 
 - A scenario is a list of steps; each step holds target parameter values
@@ -71,3 +81,21 @@ Interactive step-by-step onboarding.
   immediately gets a shareable result.
 - Launched from the header; step progress lives in `localStorage`, the
   tutorial can be aborted and restarted.
+
+---
+
+## Сделано вне плана / Done outside the plan
+
+- v1.7.0: режим заданий с физикой, обратная кинематика (мишень на конце руки),
+  ограничение пола, короткие ссылки с размерами, тесты и отладочный API.
+- v1.7.0: challenge mode with physics, inverse kinematics (target at the arm
+  tip), floor limit, short links that keep the sizes, tests and a debug API.
+
+## Идеи дальше / Next ideas
+
+- Расчёт нагрузки: момент на суставах и грузоподъёмность на вылете по длинам и
+  моторам из BOM. / Load estimate: joint torques and payload at reach from the
+  lengths and the BOM motors.
+- Область достижимости облаком точек. / Reachability cloud.
+- Экспорт STL/GLTF, PWA, Web Serial к ESP32-S3. / STL/GLTF export, PWA, Web
+  Serial link to the ESP32-S3 firmware.
