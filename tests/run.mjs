@@ -12,8 +12,9 @@
    печатает. Строка FAIL/EXCEPTION/ERR — провал, код выхода 1. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import http from 'node:http';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -46,17 +47,48 @@ if (index.split(anchor).length !== 2) { console.error('якорь старта �
 const goldenPath = path.join(here, 'golden.json');
 const golden = fs.existsSync(goldenPath) ? fs.readFileSync(goldenPath, 'utf8') : 'null';
 
+/* --http — отдать страницу с локального сервера (ветки для http(s): адрес ссылок,
+   параметры запроса); по умолчанию — file://, как при двойном клике */
+let server = null, port = 0;
+if (flags.has('--http')) {
+  const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
+  server = http.createServer((req, res) => {
+    const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    if (flags.has('--verbose')) console.error('http', req.url);
+    if (!p.startsWith(root) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': mime[path.extname(p)] || 'application/octet-stream' });
+    fs.createReadStream(p).pipe(res);
+  });
+  await new Promise(ok => server.listen(0, '127.0.0.1', ok));
+  port = server.address().port;
+}
+
+/* Chrome запускается асинхронно: синхронный spawn блокировал цикл событий, и
+   локальный http-сервер (--http) не мог ответить странице */
+function runChrome(args, timeout = 300000) {
+  return new Promise(resolve => {
+    const child = spawn(CHROME, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    child.stdout.on('data', d => { out += d; });
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeout);
+    child.on('close', () => { clearTimeout(timer); resolve(out); });
+  });
+}
+
 let failed = 0;
 for (const name of names) {
   const inject = scenarios.replace("'__SCEN__'", () => `'${name}'`).replace("'__GOLDEN__'", () => golden);
   const html = index.replace(anchor, () => 'renderPanel();\n' + inject + '\nif (fromLink) {');
   const file = path.join(outDir, `test_${name}.html`);
   fs.writeFileSync(file, html);
-  const url = pathToFileURL(file).href + (name === 'debug' ? '?debug=1' : ''); // сценарий debug проверяет API под флагом
-  const base = ['--headless=new', '--disable-gpu', '--window-size=1600,1000', '--virtual-time-budget=12000'];
+  const url = (server ? `http://127.0.0.1:${port}/tests/out/test_${name}.html` : pathToFileURL(file).href)
+    + (name === 'debug' ? '?debug=1' : ''); // сценарий debug проверяет API под флагом
+  /* сценарии синхронные: дамп DOM сразу после выполнения модуля; виртуальное время
+     нужно только скриншоту (дать three.js дорисовать), с --dump-dom оно вешало Chrome */
+  const base = ['--headless=new', '--disable-gpu', '--window-size=1600,1000'];
   const t0 = Date.now();
-  const r = spawnSync(CHROME, [...base, '--dump-dom', url], { encoding: 'utf8', maxBuffer: 64 << 20, timeout: 300000 });
-  const m = /<pre id="testlog">([\s\S]*?)<\/pre>/.exec(r.stdout || '');
+  const stdout = await runChrome([...base, '--dump-dom', url]);
+  const m = /<pre id="testlog">([\s\S]*?)<\/pre>/.exec(stdout);
   const log = m ? m[1].replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&quot;/g, '"').replace(/&amp;/g, '&') : 'NO TESTLOG (страница не дошла до сценария или Chrome завис)';
   const bad = /^(FAIL|EXCEPTION|ERR)\b/m.test(log) || !m;
   if (bad) failed++;
@@ -68,9 +100,10 @@ for (const name of names) {
   }
   if (flags.has('--shot')) {
     const shot = path.join(outDir, `shot_${name}.png`);
-    spawnSync(CHROME, [...base, `--screenshot=${shot}`, url], { timeout: 300000 });
+    await runChrome([...base, '--virtual-time-budget=12000', `--screenshot=${shot}`, url]);
     console.log(`скриншот: ${shot}`);
   }
 }
+if (server) server.close();
 console.log(`\n${names.length - failed}/${names.length} сценариев прошли`);
 process.exit(failed ? 1 : 0);

@@ -4,13 +4,14 @@
 const SCEN = '__SCEN__';
 const GOLDEN = '__GOLDEN__';
 const LOG = [];
+/* детерминированные прогоны: солвер поз использует случайные рестарты */
+Math.random = (seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; })(20260902);
 window.addEventListener('error', e => { LOG.push('ERR ' + e.message + ' @' + e.lineno); flush(); });
 function flush() {
   let pre = document.getElementById('testlog');
   if (!pre) { pre = document.createElement('pre'); pre.id = 'testlog'; document.body.appendChild(pre); }
   pre.textContent = LOG.join(String.fromCharCode(10));
 }
-setTimeout(() => { LOG.push('frames rendered ' + renderer.info.render.frame); flush(); }, 4000);
 const log = (...a) => LOG.push(a.map(x => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' '));
 const expect = (ok, msg) => log((ok ? 'PASS' : 'FAIL') + ' ' + msg);
 const f3 = v => (Array.isArray(v) ? v : v.toArray()).map(x => +x.toFixed(3));
@@ -316,6 +317,8 @@ try {
   if (SCEN === 'share') {
     expect(!/lang=|theme=/.test(shareURL()), 'без явного выбора языка и темы хвоста нет');
     expect(shareURL().includes('?c=') && structShareURL().includes('?s='), 'полная — ?c=, короткая — ?s=');
+    if (location.protocol === 'file:') expect(SHARE_BASE === SHARE_FALLBACK, 'file:// → запасной публичный адрес');
+    else expect(SHARE_BASE === location.origin + location.pathname.replace(/index\.html?$/i, '') && shareURL().startsWith(location.origin), 'http(s): ссылки ведут на адрес страницы ' + SHARE_BASE);
     const n0 = components.length; startChallenge();
     expect(components.length === n0 && components.filter(c => 'angle' in c).every(c => c.angle === 0), 'режим заданий берёт текущую руку, только сбрасывает позу');
     stopChallenge();
@@ -363,6 +366,35 @@ try {
     expect(api.state().challenge?.task === 0 && api.challenge.data.holdables.length === 1, 'challenge.start + tick');
     api.challenge.stop();
     expect(api.share.decode(api.share.encode(cfg)).length === 4 && api.share.short().includes('?s='), 'share.encode/decode/short');
+  }
+  /* ---------- обратная кинематика: солвер и перетаскивание мишени ---------- */
+  if (SCEN === 'ik') {
+    setArm([{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 1.0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 0.8 }, { type: 'roll', angle: 0 }, { type: 'gripper', open: 50 }]);
+    const tgt = new THREE.Vector3(1.4, 1.6, 1.2); // в пределах ±120° наклона
+    const res = ikSolve(tgt);
+    expect(res < 0.02, `солвер довёл конец руки до цели (остаток ${res.toFixed(3)})`);
+    expect(armMinY() >= -0.006 && components[6].open === 50 && components[2].length === 1, 'пол не нарушен, схват и длины не тронуты');
+    const far = ikSolve(new THREE.Vector3(5, 0.5, 5));
+    expect(far > 1 && armMinY() >= -0.006, 'недостижимая цель — максимально близко, над полом');
+    const low = ikSolve(new THREE.Vector3(1.2, -0.3, 0.5));
+    expect(armMinY() >= -0.006, `цель под полом — рука остаётся над полом (остаток ${low.toFixed(2)})`);
+    /* перетаскивание мышью: мишень → экран → pointer-события */
+    startChallenge();
+    setIK(true);
+    const cv = renderer.domElement, r = cv.getBoundingClientRect();
+    const toClient = p => { const v = p.clone().project(camera); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
+    renderer.render(scene, camera);
+    const start = toClient(ikGizmo.position), before = cleanConfig();
+    const ev = (type, x, y) => cv.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true }));
+    ev('pointerdown', start.x, start.y);
+    expect(!!ikDrag && !controls.enabled, 'нажатие на мишень начало перетаскивание');
+    for (let k = 1; k <= 10; k++) ev('pointermove', start.x - 12 * k, start.y + 6 * k);
+    ev('pointerup', start.x - 120, start.y + 60);
+    const after = cleanConfig();
+    expect(!ikDrag && controls.enabled && JSON.stringify(before) !== JSON.stringify(after), 'после отпускания камера свободна, поза изменилась');
+    expect(chal.log.length > 0 && chal.log.every(a => a.kind === 'param'), `в журнал записаны параметры: ${chal.log.length}`);
+    ev('pointerdown', 5, 5); expect(!ikDrag, 'нажатие мимо мишени ничего не начинает');
+    stopChallenge(); setIK(false);
   }
 } catch (e) { log('EXCEPTION', e.message, e.stack); }
 flush();

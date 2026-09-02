@@ -68,7 +68,7 @@
     position: absolute; left: 12px; top: 10px; z-index: 2;
     display: flex; gap: 8px; flex-wrap: wrap;
   }
-  #animToggle, #btnShare, #btnUndo, #btnHelp {
+  #animToggle, #btnShare, #btnUndo, #btnHelp, #btnIK {
     display: flex; align-items: center; gap: 8px;
     background: var(--overlay); border: 1px solid var(--border);
     border-radius: 8px; padding: 7px 13px;
@@ -77,7 +77,8 @@
     box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
     -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   }
-  #animToggle:hover, #btnShare:hover, #btnUndo:hover, #btnHelp:hover { border-color: var(--accent); }
+  #animToggle:hover, #btnShare:hover, #btnUndo:hover, #btnHelp:hover, #btnIK:hover { border-color: var(--accent); }
+  #btnIK.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   #btnHelp { font-weight: 800; padding: 7px 12px; }
   /* долгое нажатие по «Ссылке»: без выделения текста и системного меню */
   #btnShare {
@@ -528,6 +529,7 @@
     <button id="btnHelp">?</button>
     <label id="animToggle"><input type="checkbox" id="chkAnimate" checked><span id="animLbl">Animate</span></label>
     <button id="btnShare"></button>
+    <button id="btnIK"></button>
     <button id="btnUndo" hidden></button>
   </div>
   <div id="tutHint" hidden></div>
@@ -625,9 +627,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 /* Версия проекта — инкрементируется при каждом заметном изменении */
 const VERSION = '1.7.0';
 
-/* Публичный адрес приложения (GitHub Pages репозитория iBog/robot_arm_builder) —
-   на него ведёт кнопка «Ссылка», параметр ?config= восстанавливает руку */
-const SHARE_BASE = 'https://ibog.github.io/robot_arm_builder/';
+/* Адрес для ссылок кнопки «Ссылка» — тот, откуда открыта страница (свой домен,
+   GitHub Pages, локальный сервер), чтобы шэринг не уводил трафик с нового адреса;
+   завершающий index.html отбрасывается. При file:// — публичный адрес-запасной. */
+const SHARE_FALLBACK = 'https://ibog.github.io/robot_arm_builder/';
+const SHARE_BASE = /^https?:$/.test(location.protocol)
+  ? location.origin + location.pathname.replace(/index.html?$/i, '')
+  : SHARE_FALLBACK;
 
 /* ================= Локализация: English / Русский ================= */
 
@@ -678,6 +684,9 @@ const STR = {
                 ru: 'Скопировать короткую ссылку с составом и размерами руки (позы по умолчанию). Долгое нажатие — полная ссылка ещё и с точными позами' },
   shareCopied:{ en: '✓ full link copied',             ru: '✓ полная ссылка скопирована' },
   shortCopied:{ en: '✓ short link copied',            ru: '✓ короткая ссылка скопирована' },
+  ik:         { en: '🎯 IK',                          ru: '🎯 ИК' },
+  ikTip:      { en: 'Inverse kinematics: drag the target at the arm tip, the joints follow',
+                ru: 'Обратная кинематика: тяните мишень на конце руки — суставы подберутся сами' },
   undo:       { en: '↩️ Undo',                        ru: '↩️ Отмена' },
   undoTip:    { en: 'Revert the last change to the arm',
                 ru: 'Откатить последнее изменение руки' },
@@ -2959,6 +2968,131 @@ function animateArm(now) {
   if (now - lastJsonSync > 300) { lastJsonSync = now; updateJSONView(); }
 }
 
+/* ================= Обратная кинематика: мишень на конце руки ================= */
+
+/* Кнопка «🎯 IK» показывает мишень в точке armTip(); её тянут мышью/пальцем в
+   плоскости экрана, а ikSolve() координатным спуском подбирает все позные
+   параметры (углы, выдвижение, каретку — не габариты и не инструменты), чтобы
+   конец руки пришёл к цели: штраф за пол, лёгкая регуляризация к исходной позе,
+   чтобы суставы не перекидывались. В журнал заданий изменения пишутся по
+   окончании перетаскивания — по одной записи на параметр. */
+const IK_SKIP = new Set(['open', 'power', 'speed']); // инструмент целью не управляет
+const btnIK = document.getElementById('btnIK');
+let ikOn = false;
+const ikGizmo = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 14),
+  new THREE.MeshBasicMaterial({ color: 0x4da3ff, transparent: true, opacity: 0.65, depthTest: false }));
+ikGizmo.renderOrder = 10;
+ikGizmo.visible = false;
+scene.add(ikGizmo);
+const ikRay = new THREE.Raycaster(), ikNDC = new THREE.Vector2(), ikPlane = new THREE.Plane();
+const _ikTip = new THREE.Vector3(), _ikTarget = new THREE.Vector3(), _ikDir = new THREE.Vector3();
+let ikDrag = null; // { start: [{c, p, i, v0}] } во время перетаскивания
+
+function ikParams() {
+  const out = [];
+  components.forEach((c, i) => {
+    for (const p of TYPES[c.type].params) if (!p.build && !IK_SKIP.has(p.key)) out.push({ c, p, i });
+  });
+  return out;
+}
+
+/* подгоняет позу под цель; возвращает остаточное расстояние */
+function ikSolve(target) {
+  const P = ikParams();
+  if (!P.length) return Infinity;
+  const v0 = P.map(x => x.c[x.p.key] ?? x.p.def);
+  const evalF = () => {
+    for (const x of P) applyParam3D(x.c);
+    armRoot.updateWorldMatrix(true, true);
+    const d = armTip(_ikTip).distanceToSquared(target);
+    /* пол — жёсткое ограничение: из допустимой позы шаг под пол не принимается,
+       из недопустимой (так уже стояли) — принимаются шаги, уменьшающие глубину */
+    const under = Math.max(0, -0.005 - armMinY());
+    let reg = 0;
+    P.forEach((x, k) => { const r = (x.c[x.p.key] - v0[k]) / (paramMax(x.c, x.p) - x.p.min); reg += r * r; });
+    return d + 0.002 * reg + (under > 0 ? 1000 + under : 0);
+  };
+  let f = evalF(), evals = 0;
+  for (let scale = 0.05; scale > 0.0005; scale *= 0.5) {
+    let improved = true;
+    while (improved && evals < 6000) {
+      improved = false;
+      for (const x of P) {
+        const max = paramMax(x.c, x.p), step = (max - x.p.min) * scale;
+        for (const d of [-1, 1]) {
+          const old = x.c[x.p.key];
+          x.c[x.p.key] = Math.min(max, Math.max(x.p.min, old + d * step));
+          const f2 = evalF();
+          evals++;
+          if (f2 < f - 1e-9) { f = f2; improved = true; } else x.c[x.p.key] = old;
+        }
+      }
+    }
+  }
+  evalF();
+  for (const x of P) syncSlider(x.c, x.p.key);
+  invalidate();
+  return armTip(_ikTip).distanceTo(target);
+}
+
+function setIK(on) {
+  ikOn = on;
+  btnIK.classList.toggle('on', on);
+  ikGizmo.visible = on;
+  if (on) armTip(ikGizmo.position);
+  invalidate();
+}
+btnIK.onclick = () => setIK(!ikOn);
+
+function ikPointerNDC(e) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ikNDC.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height * 2 - 1));
+  ikRay.setFromCamera(ikNDC, camera);
+}
+function ikHit(e) {
+  if (!ikOn) return false;
+  ikPointerNDC(e);
+  return ikRay.intersectObject(ikGizmo).length > 0;
+}
+
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (!ikOn || chal?.replay || !ikHit(e)) return;
+  e.preventDefault();
+  controls.enabled = false;
+  renderer.domElement.setPointerCapture(e.pointerId);
+  /* плоскость перетаскивания — параллельна экрану, через мишень */
+  camera.getWorldDirection(_ikDir);
+  ikPlane.setFromNormalAndCoplanarPoint(_ikDir, ikGizmo.position);
+  ikDrag = { start: ikParams().map(x => ({ ...x, v0: x.c[x.p.key] ?? x.p.def })) };
+  renderer.domElement.style.cursor = 'grabbing';
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  if (!ikOn) return;
+  if (!ikDrag) { renderer.domElement.style.cursor = ikHit(e) ? 'grab' : ''; return; }
+  ikPointerNDC(e);
+  if (!ikRay.ray.intersectPlane(ikPlane, _ikTarget)) return;
+  ikSolve(_ikTarget);
+  updateJSONView();
+});
+function ikDragEnd(e) {
+  if (!ikDrag) return;
+  const d = ikDrag;
+  ikDrag = null;
+  controls.enabled = true;
+  renderer.domElement.style.cursor = '';
+  try { renderer.domElement.releasePointerCapture(e.pointerId); } catch { /* уже отпущен */ }
+  /* довести значения до шага слайдера (с ограничением пола) и записать в журнал */
+  for (const x of d.start) {
+    const v = quantParam(x.c[x.p.key], x.p);
+    if (v !== x.c[x.p.key]) { applyParamChecked(x.c, x.p.key, v); syncSlider(x.c, x.p.key); }
+    if (x.c[x.p.key] !== x.v0) recordAction({ kind: 'param', i: x.i, type: x.c.type, key: x.p.key, from: x.v0, to: x.c[x.p.key] });
+  }
+  updateJSONView();
+  updateURDFView();
+}
+renderer.domElement.addEventListener('pointerup', ikDragEnd);
+renderer.domElement.addEventListener('pointercancel', ikDragEnd);
+
 /* ================= Обучение: пошаговая сборка первой руки ================= */
 
 /* Сценарий: поворотный стол → звено → наклон → звено → вращение → схват */
@@ -4174,6 +4308,8 @@ function applyI18n() {
   const btnShare = document.getElementById('btnShare');
   btnShare.textContent = t('share');
   btnShare.title = t('shareTip');
+  btnIK.textContent = t('ik');
+  btnIK.title = t('ikTip');
   const bUndo = document.getElementById('btnUndo');
   bUndo.textContent = t('undo');
   bUndo.title = t('undoTip');
@@ -4236,6 +4372,7 @@ if (urlParam('debug') !== null) {
     setParam(i, key, v) { const c = components[i]; const acc = setParamChecked(c, key, v); syncSlider(c, key); return acc; },
     tip: () => armTip().toArray(),
     minY: () => armMinY(),
+    ik: { on: setIK, solve: (x, y, z) => ikSolve(new THREE.Vector3(x, y, z)) },
     tick(now) { if (chal) challengeTick(now); },
     state: () => ({
       version: VERSION, lang, theme, components: cleanConfig(), tip: armTip().toArray(), minY: armMinY(),
@@ -4269,6 +4406,7 @@ renderer.setAnimationLoop((now) => {
   if (chkFit.checked && cameraAutoExpand()) invalidate();
   if (!live && !moved && renderPending <= 0) return; // ничего не изменилось — кадр пропускаем
   if (renderPending > 0) renderPending--;
+  if (ikOn && !ikDrag) armTip(ikGizmo.position); // мишень следует за концом руки
   updateFog();
   renderer.render(scene, camera);
 });
