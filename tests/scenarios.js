@@ -227,6 +227,126 @@ await (async () => { try {
     expect(chal.done[2], 'распилена на новом месте');
   }
 
+  /* ---------- повторный вход и сброс возвращают позу в ноль, даже при промахе IK ---------- */
+  if (SCEN === 'restart') {
+    const drag = (c, key, v) => { const s = c._sliders[key].slider; s.value = v; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change')); };
+    const pitch = components.find(c => c.type === 'pitch');
+    startChallenge();
+    drag(components[0], 'angle', 45); drag(pitch, 'angle', 30);
+    chal.done[0] = true;
+    document.getElementById('chalClose').click(); tutActions.querySelectorAll('button')[1].click();
+    expect(chal === null && components[0].angle === 45, 'вышли с подтверждением, поза осталась');
+    btnChal.click();
+    expect(!!chal && components.every(c => !c.angle) && components[0]._sliders.angle.slider.value === '0', 'повторный вход: углы и слайдеры в нуле');
+    /* мишень IK осталась у старой цели (промах): buildArm() зовёт ikRetry(), который тянул бы
+       руку обратно к ней сразу после сброса позы — сброс должен снимать промах */
+    drag(components[0], 'angle', 45); drag(pitch, 'angle', 30);
+    setIK(true);
+    ikSetMiss(armTip(new THREE.Vector3()).add(new THREE.Vector3(0, 0.03, 0)), 0.03);
+    chal.done[0] = true;
+    document.getElementById('chalClose').click(); tutActions.querySelectorAll('button')[1].click();
+    btnChal.click();
+    ikRetry(); // то, что сделала бы микрозадача из buildArm()
+    expect(!ikMiss && ikHint.hidden, 'повторный вход снял промах IK');
+    expect(components.every(c => !c.angle), 'повторный вход при промахе IK: углы в нуле, рука не вернулась к старой цели');
+    drag(components[0], 'angle', 45); drag(pitch, 'angle', 30);
+    ikSetMiss(armTip(new THREE.Vector3()).add(new THREE.Vector3(0, 0.03, 0)), 0.03);
+    resetTask(); ikRetry();
+    expect(!ikMiss && components.every(c => !c.angle), 'сброс при промахе IK: углы в нуле');
+    drag(components[0], 'angle', 45);
+    ikSetMiss(armTip(new THREE.Vector3()).add(new THREE.Vector3(0, 0.03, 0)), 0.03);
+    document.querySelectorAll('#chalTasks .chal-task')[1].click(); ikRetry();
+    expect(!ikMiss && components.every(c => !c.angle) && chal.task === 1, 'переход к заданию при промахе IK: углы в нуле');
+    setIK(false);
+    stopChallenge();
+  }
+
+  /* ---------- откат записи до шага: стрелка на строке, подтверждение, дальше запись продолжается ---------- */
+  if (SCEN === 'rollback') {
+    const drag = (c, key, v) => { const s = c._sliders[key].slider; s.value = v; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change')); };
+    startChallenge();
+    const pitch = components.find(c => c.type === 'pitch');
+    drag(components[0], 'angle', 45);
+    addRow.querySelector('button[data-type="roll"]').click();
+    const n = components.length;
+    drag(components[n - 1], 'angle', -90);
+    document.querySelectorAll('#chalTasks .chal-task')[1].click();
+    drag(pitch, 'angle', 20);
+    expect(chal.log.map(a => a.kind).join() === 'param,add,param,task,param', 'журнал: ' + chal.log.map(a => a.kind).join());
+    let backs = actList.querySelectorAll('.act-back');
+    expect(backs.length === 4 && !actList.querySelectorAll('.act')[4].querySelector('.act-back'), 'стрелка на всех шагах, кроме последнего');
+    backs[2].click();
+    expect(!tutModal.hidden && chal.log.length === 5, 'откат переспрашивает, пока ничего не тронуто');
+    tutActions.querySelector('button').click();
+    expect(tutModal.hidden && chal.log.length === 5 && chal.task === 1 && pitch.angle === 20, '«Оставить» ничего не меняет');
+    camera.position.set(9, 4, 9); controls.target.set(1, 1, 1);
+    chal.done[0] = true; // отметка, полученная позже шага отката, должна сняться
+    backs[2].click(); tutActions.querySelectorAll('button')[1].click();
+    expect(tutModal.hidden && chal.log.length === 3 && chal.task === 0 && !chal.replay && !document.body.classList.contains('replaying'),
+           'откат до шага 3: журнал обрезан, задание 1, повтор не висит');
+    /* рука пересобрана из startConfig — объекты компонентов новые, старую ссылку на наклон не использовать */
+    const pitch2 = components.find(c => c.type === 'pitch');
+    expect(components.length === n && components[0].angle === 45 && components[n - 1].angle === -90 && pitch2.angle === 0
+           && components[0]._sliders.angle.slider.value === '45', `рука — как после шага 3: состав и поза, слайдеры синхронны (${components.map(c => c.angle)})`);
+    expect(chal.holdables[0]?.kind === 'cube' && !chal.done[0] && chal.lastNow === 0, 'предметы задания 1 заново, ✅ снята, dt следующего кадра нулевой');
+    expect(f3(camera.position).join() === '9,4,9', 'камера не тронута');
+    backs = actList.querySelectorAll('.act-back');
+    expect(actList.querySelectorAll('.act').length === 3 && backs.length === 2, 'журнал перерисован: 3 шага, 2 стрелки');
+    drag(components[0], 'angle', 10);
+    expect(chal.log.length === 4 && chal.log[3].kind === 'param' && chal.log[3].from === 45 && chal.log[3].to === 10, 'новое действие записано следом за шагом отката');
+    ticks(5); expect(chal.log.length === 4 && chal.task === 0, 'живые кадры после отката ничего не ломают');
+    /* откат до первого шага; во время повтора стрелки спрятаны */
+    rollbackLog(1);
+    expect(chal.log.length === 1 && components.length === n - 1 && components[0].angle === 45, 'откат до шага 1: добавленное снято, поза шага 1');
+    drag(components[0], 'angle', 20);
+    startReplay();
+    expect(getComputedStyle(actList.querySelector('.act-back')).display === 'none', 'во время повтора стрелок нет');
+    stopReplay(); stopChallenge();
+  }
+
+  /* ---------- запись IK: поза применяется целиком, а не по параметру ---------- */
+  if (SCEN === 'pose') {
+    setArm([{ type: 'pitch', angle: 0 }, { type: 'link', length: 0.5 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 1 }, { type: 'drill', speed: 0 }]);
+    startChallenge();
+    const p1 = components[0], p2 = components[2];
+    /* конечная поза допустима, но первый её параметр в одиночку уводит руку под пол */
+    const seq = setParamChecked(p1, 'angle', 120), a1 = Math.ceil(seq) + 1;
+    expect(seq < a1, `наклон 1 в одиночку упирается в пол: ${seq.toFixed(1)}, берём ${a1}`);
+    /* второй наклон подбираем: первый угол, при котором вся рука над полом */
+    let a2 = -120;
+    for (; a2 <= 0; a2 += 5) { p1.angle = a1; p2.angle = a2; applyParam3D(p1); applyParam3D(p2); if (armMinY() >= -0.005) break; }
+    expect(a2 <= 0 && armMinY() >= -0.005, `та же поза целиком — над полом при наклоне 2 = ${a2}`);
+    const items = [{ i: 0, type: 'pitch', key: 'angle', from: 0, to: a1 }, { i: 2, type: 'pitch', key: 'angle', from: 0, to: a2 }];
+    recordAction({ kind: 'pose', items });
+    expect(actList.querySelector('.act-txt').textContent.includes('IK') && actList.querySelector('.act-txt').textContent.includes(String(a1)), 'подпись записи: мишень IK и параметры');
+    undoLastAction();
+    expect(p1.angle === 0 && p2.angle === 0 && chal.log.length === 0, 'отмена возвращает всю позу');
+    recordAction({ kind: 'pose', items });
+    startReplay(); ticks(300);
+    expect(!chal.replay && components[0].angle === a1 && components[2].angle === a2 && components[0]._sliders.angle.slider.value === String(a1),
+           `повтор позы IK: оба параметра дошли до записанных (${components[0].angle}, ${components[2].angle})`);
+    expect(armMinY() >= -0.005, 'после повтора рука над полом');
+    rollbackLog(1);
+    expect(components[0].angle === a1 && components[2].angle === a2, 'откат до записи позы даёт ту же позу');
+    /* поза для другой руки: параметры дожимаются с ограничением пола, без исключений */
+    components[0].angle = 0; components[2].angle = 0; applyParam3D(components[0]); applyParam3D(components[2]);
+    applyPose([{ i: 0, type: 'pitch', key: 'angle', from: 0, to: a1 }, { i: 7, type: 'pitch', key: 'angle', from: 0, to: a2 }], 1, true);
+    expect(components[0].angle < a1 && armMinY() >= -0.005, 'поза с несуществующим звеном: остальное применено с полом');
+    /* ikRetry после перестройки руки (висящий промах) — та же запись «поза», иначе повтор
+       идёт со старой позой и все шаги проходят мимо цели */
+    resetTask(); setIK(true);
+    const tgt = armTip(new THREE.Vector3()).add(new THREE.Vector3(0, -0.6, 0.6)); // в плоскости наклонов: турели нет
+    ikSetMiss(tgt, 1);
+    addRow.querySelector('button[data-type="link"]').click(); // buildArm() ставит ikRetry в микрозадачу
+    ikRetry(); // то, что она сделает
+    const solved = components.map(c => c.angle);
+    expect(chal.log.length === 2 && chal.log[0].kind === 'add' && chal.log[1].kind === 'pose' && chal.log[1].items.length > 0 && solved.some(Boolean),
+           `ikRetry записан как поза после добавления: ${chal.log.map(a => a.kind).join()}`);
+    startReplay(); ticks(400);
+    expect(!chal.replay && components.map(c => c.angle).join() === solved.join(), `повтор воспроизводит позу ikRetry: ${components.map(c => c.angle).join()} = ${solved.join()}`);
+    setIK(false); stopChallenge();
+  }
+
   /* ---------- запись действий: журнал, отмена, повтор, цикл, камера ---------- */
   if (SCEN === 'replay') {
     startChallenge();
@@ -249,12 +369,33 @@ await (async () => { try {
     chkLoop.checked = false; ticks(500);
     expect(!chal.replay && components[0].angle === 45 && components[components.length - 1].angle === -90, 'однократный повтор дошёл до конца');
     expect(f3(camera.position).join() === '9,4,9', 'камера не тронута');
-    /* сброс задания: журнал пуст, рука в нулевой позе, состав сохранён и стал точкой отсчёта повтора */
-    const nBefore = components.length; resetTask();
-    expect(chal.log.length === 0 && components[0].angle === 0 && components.length === nBefore && chal.startConfig.length === nBefore && actList.querySelectorAll('.act').length === 0 && !chal.replay, 'сброс: журнал очищен, поза нулевая, состав сохранён');
+    /* сброс без переходов в записи — к её началу: журнал пуст, рука — исходная (добавленное
+       по ходу задания снято), поза нулевая */
+    const n0 = chal.startConfig.length; resetTask();
+    expect(chal.log.length === 0 && components[0].angle === 0 && components.length === n0 && chal.startConfig.length === n0 && actList.querySelectorAll('.act').length === 0 && !chal.replay, 'сброс: журнал очищен, поза нулевая, рука исходная');
     const s2 = components[0]._sliders.angle.slider; s2.value = 45; s2.dispatchEvent(new Event('input')); s2.dispatchEvent(new Event('change'));
     expect(chal.log.length === 1, 'после сброса запись идёт заново');
     setLang(lang === 'en' ? 'ru' : 'en'); expect(actList.querySelectorAll('.act').length === 1, 'смена языка перерисовала журнал');
+    /* сброс после перехода — к записи «перейти к заданию»: шаги внутри задания сняты
+       (включая добавленное), состав на момент перехода и выполненное ранее задание сохранены */
+    chal.done[0] = true;
+    document.querySelectorAll('#chalTasks .chal-task')[1].click();
+    const n1 = components.length;
+    const s3 = components[0]._sliders.angle.slider; s3.value = 30; s3.dispatchEvent(new Event('input')); s3.dispatchEvent(new Event('change'));
+    addRow.querySelector('button[data-type="roll"]').click();
+    const s4 = components[components.length - 1]._sliders.angle.slider; s4.value = 20; s4.dispatchEvent(new Event('input')); s4.dispatchEvent(new Event('change'));
+    expect(chal.log.map(a => a.kind).join() === 'param,task,param,add,param' && components.length === n1 + 1, 'шаги внутри задания 2: ' + chal.log.map(a => a.kind).join());
+    resetTask();
+    expect(chal.log.map(a => a.kind).join() === 'param,task' && chal.task === 1 && components.length === n1 && components.every(c => !c.angle)
+           && chal.done[0] && !chal.done[1] && actList.querySelectorAll('.act').length === 2 && chal.t2, 'сброс после перехода: откат к «перейти к заданию 2», состав и ✅ задания 1 сохранены');
+    /* остановленный на середине повтор: сброс всё равно собирает руку из записи, а не откатывает хвост */
+    const s5 = components[0]._sliders.angle.slider; s5.value = 40; s5.dispatchEvent(new Event('input')); s5.dispatchEvent(new Event('change'));
+    addRow.querySelector('button[data-type="link"]').click();
+    startReplay(); ticks(3); stopReplay();
+    expect(chal.log.length === 4 && chal.task === 0, 'повтор остановлен в начале: журнал цел, задание 1');
+    gotoTask(1); resetTask();
+    expect(chal.log.map(a => a.kind).join() === 'param,task,param,add,task' && components.length === n1 + 1 && components.every(c => !c.angle), 'сброс после прерванного повтора: состав собран из записи');
+    chal.log = []; chal.done = [false, false, false]; replayReset();
     /* ✕ с чистого листа закрывает молча, с прогрессом — переспрашивает */
     const close = document.getElementById('chalClose');
     chal.log = []; chal.done = [false, false, false];
@@ -439,7 +580,7 @@ await (async () => { try {
     ev('pointerup', start.x - 120, start.y + 60);
     const after = cleanConfig();
     expect(!ikDrag && controls.enabled && JSON.stringify(before) !== JSON.stringify(after), 'после отпускания камера свободна, поза изменилась');
-    expect(chal.log.length > 0 && chal.log.every(a => a.kind === 'param'), `в журнал записаны параметры: ${chal.log.length}`);
+    expect(chal.log.length === 1 && chal.log[0].kind === 'pose' && chal.log[0].items.length > 0, `перетаскивание — одна запись «поза» с параметрами: ${chal.log[0]?.items?.length}`);
     ev('pointerdown', 5, 5); expect(!ikDrag, 'нажатие мимо мишени ничего не начинает');
     /* тач: пальцем в маленький шарик не попасть — рядом с ним касание всё равно берёт мишень */
     renderer.render(scene, camera);

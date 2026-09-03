@@ -204,6 +204,14 @@
   .act-txt .ico { vertical-align: -2px; margin-right: 2px; }
   .act.cur { background: var(--accent-soft); border-radius: 6px; }
   .act.past { opacity: .6; }
+  .act-txt { flex: 1; }
+  .act-back {
+    background: none; border: none; color: var(--muted); opacity: .6;
+    cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+  }
+  .act:hover .act-back, .act-back:focus-visible { opacity: 1; }
+  .act-back:hover { color: var(--accent); background: var(--accent-soft); }
+  body.replaying .act-back { display: none; }
   #actEmpty { color: var(--muted); text-align: center; padding: 18px 8px; }
   #actbar button:disabled { opacity: .45; cursor: default; }
   #actLoop { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; }
@@ -862,6 +870,13 @@ const STR = {
   logTask:    { en: i => `Go to task ${i}`,          ru: i => `Перейти к заданию ${i}` },
   logReset:   { en: i => `Reset task ${i}`,          ru: i => `Сброс задания ${i}` },
   logReplaying: { en: (i, n) => `▶ replaying ${i} / ${n}`, ru: (i, n) => `▶ воспроизведение ${i} / ${n}` },
+  logPose:    { en: 'IK target:',                    ru: 'Мишень IK:' },
+  logBack:    { en: 'Roll the log back to this step', ru: 'Откатить запись до этого шага' },
+  logBackTitle: { en: 'Roll back the log?',          ru: 'Откатить запись?' },
+  logBackText: { en: (n, m) => `Steps ${n + 1}–${m} will be removed. The arm, the task objects and the ✅ marks return to how they were right after step ${n} (the log is replayed up to it). New actions will be recorded after it.`,
+                 ru: (n, m) => `Шаги ${n + 1}–${m} будут удалены. Рука, предметы заданий и отметки ✅ вернутся к состоянию сразу после шага ${n} (запись проигрывается до него заново). Новые действия запишутся следом за ним.` },
+  logBackYes: { en: 'Roll back',                     ru: 'Откатить' },
+  logBackNo:  { en: 'Keep everything',               ru: 'Оставить' },
 };
 
 const LANGS = ['en', 'ru'];
@@ -3083,14 +3098,32 @@ function ikClearMiss() {
   ikHint.hidden = true;
   invalidate();
 }
-/* после перестройки руки — попробовать цель снова */
+/* после перестройки руки — попробовать цель снова. Найденная поза — такое же изменение
+   руки, как перетаскивание мишени: без записи в журнал повтор шёл бы со старой позой
+   (кронштейн вверх, а не к стене) и все дальнейшие шаги проходили бы мимо цели. */
 function ikRetry() {
   if (!ikMiss || !ikOn) return;
   const target = ikMiss.target;
-  const res = ikSolve(target);
-  for (const x of ikParams()) syncSlider(x.c, x.p.key);
+  const start = ikParams().map(x => ({ ...x, v0: x.c[x.p.key] ?? x.p.def }));
+  ikSolve(target);
+  ikCommit(start);
+  const res = armTip(_ikTip).distanceTo(target);
   if (res <= IK_TOL) ikClearMiss(); else ikSetMiss(target, res);
+}
+/* Итог решения IK: параметры доводятся до шага слайдера (с ограничением пола), слайдеры
+   синхронизируются, изменение позы пишется в журнал заданий одной записью «поза» —
+   параметры менялись вместе, и повторять их надо вместе (см. applyPose). start — [{c, p, i, v0}]. */
+function ikCommit(start) {
+  const items = [];
+  for (const x of start) {
+    const v = quantParam(x.c[x.p.key], x.p);
+    if (v !== x.c[x.p.key]) applyParamChecked(x.c, x.p.key, v);
+    syncSlider(x.c, x.p.key);
+    if (x.c[x.p.key] !== x.v0) items.push({ i: x.i, type: x.c.type, key: x.p.key, from: x.v0, to: x.c[x.p.key] });
+  }
+  if (items.length) recordAction({ kind: 'pose', items });
   updateJSONView();
+  updateURDFView();
 }
 /* пунктир от конца руки к цели — обновляется в кадре */
 function ikUpdateLine() {
@@ -3205,14 +3238,7 @@ function ikDragEnd(e) {
   controls.enabled = true;
   renderer.domElement.style.cursor = '';
   try { renderer.domElement.releasePointerCapture(e.pointerId); } catch { /* уже отпущен */ }
-  /* довести значения до шага слайдера (с ограничением пола) и записать в журнал */
-  for (const x of d.start) {
-    const v = quantParam(x.c[x.p.key], x.p);
-    if (v !== x.c[x.p.key]) { applyParamChecked(x.c, x.p.key, v); syncSlider(x.c, x.p.key); }
-    if (x.c[x.p.key] !== x.v0) recordAction({ kind: 'param', i: x.i, type: x.c.type, key: x.p.key, from: x.v0, to: x.c[x.p.key] });
-  }
-  updateJSONView();
-  updateURDFView();
+  ikCommit(d.start);
   /* достали или нет: промах остаётся на экране, пока руку не перестроят */
   const res = armTip(_ikTip).distanceTo(ikGizmo.position);
   if (res > IK_TOL) ikSetMiss(ikGizmo.position, res); else ikClearMiss();
@@ -4118,8 +4144,10 @@ function clearTask() {
 }
 
 /* стартовая поза каждого задания: рука вверх — все углы, выдвижения и позиции в 0,
-   шпиндели выключены, схват раскрыт */
+   шпиндели выключены, схват раскрыт. Висящий промах IK снимается: иначе ikRetry()
+   после buildArm() тут же вернул бы руку к старой цели, и сброс не был бы виден. */
 function resetPose() {
+  if (ikMiss) ikClearMiss();
   for (const c of components) {
     for (const p of TYPES[c.type].params) {
       if (p.build) continue; // габариты — часть конструкции
@@ -4148,14 +4176,23 @@ function gotoTask(i) {
   recordAction({ kind: 'task', from, to: i });
 }
 
-/* Сброс задания — начать с чистого листа: журнал действий очищается, рука
-   возвращается в нулевую позу (setTask), её текущий состав становится точкой
-   отсчёта для повтора. */
+/* Сброс задания — вернуться к его началу в записи: журнал обрезается до последнего
+   перехода к этому заданию (без него — до начала записи), рука собирается заново
+   из startConfig повторным применением оставшихся записей, поза — нулевая (setTask).
+   Записи применяются вперёд, а не откатываются: после остановленного на середине
+   повтора текущее состояние хвосту журнала не соответствует. Выполненные другие
+   задания не трогаются. */
 function resetTask() {
   stopReplay();
-  chal.log = [];
+  const log = chal.log;
+  let k = log.length;
+  while (k > 0 && !(log[k - 1].kind === 'task' && log[k - 1].to === chal.task)) k--;
+  log.length = k;
+  components = clone(chal.startConfig);
+  buildArm();
+  renderPanel();
+  for (const a of log) { if (a.kind === 'task') resetPose(); else applyAction(a, false); }
   setTask(chal.task);
-  chal.startConfig = cleanConfig();
   renderLog();
 }
 
@@ -4270,6 +4307,7 @@ document.getElementById('chalClose').onclick = () => {
 /* ---- Запись действий: журнал, отмена последнего, воспроизведение ---- */
 
 /* Действие: {kind:'param', i, type, key, from, to} — слайдер (одна запись на перетаскивание);
+   {kind:'pose', items:[{i, type, key, from, to}]} — перетаскивание мишени IK (все параметры разом);
    {kind:'add', i, comp} / {kind:'del', i, comp} — кнопки; {kind:'config', from, to} — массовые
    изменения (генерация, новый проект, Undo, Apply); {kind:'task', from, to} / {kind:'reset', task}. */
 function recordAction(a) {
@@ -4299,6 +4337,8 @@ function applyAction(a, reverse) {
     if (!c || c.type !== a.type) return;
     setParamChecked(c, a.key, reverse ? a.from : a.to);
     syncSlider(c, a.key);
+  } else if (a.kind === 'pose') {
+    applyPose(a.items, reverse ? 0 : 1, true);
   } else if (a.kind === 'add') {
     if (reverse) components.splice(a.i, 1); else components.splice(a.i, 0, clone(a.comp));
     buildArm(); renderPanel();
@@ -4315,16 +4355,77 @@ function applyAction(a, reverse) {
   }
 }
 
+/* Поза из записи IK — все параметры сразу, k ∈ [0,1] между from и to. По одному их
+   применять нельзя: мишень двигала параметры вместе, а промежуточное сочетание (кронштейн
+   уже вниз, наклон ещё старый) может уйти под пол и обрезаться — тогда повтор разъезжается
+   с записью. Промежуточный кадр повтора под полом просто пропускается; конечная поза была
+   принята при записи, а если рука с тех пор другая — параметры дожимаются по одному с полом. */
+function applyPose(items, k, final) {
+  const live = items.filter(x => components[x.i]?.type === x.type);
+  const prev = live.map(x => components[x.i][x.key]);
+  const set = vals => live.forEach((x, j) => { const c = components[x.i]; c[x.key] = vals[j]; applyParam3D(c, x.key); });
+  set(live.map(x => x.from + (x.to - x.from) * k));
+  if (armMinY() < -0.005) {
+    set(prev); // applyParamChecked отталкивается от текущего значения как от допустимого
+    if (!final) return;
+    for (const x of live) applyParamChecked(components[x.i], x.key, x.from + (x.to - x.from) * k);
+  }
+  for (const x of live) syncSlider(components[x.i], x.key);
+  updateJSONView();
+  updateURDFView();
+}
+
 function undoLastAction() {
   if (!chal || chal.replay || !chal.log.length) return;
   applyAction(chal.log.pop(), true);
   renderLog();
 }
 
+/* Откат записи до шага k (первые k записей остаются): рука, задание, предметы и ✅ —
+   как сразу после этого шага, дальше запись продолжается за ним. Хвост не откатывается
+   назад — запись проигрывается заново мгновенно штатным повтором с синтетическим
+   временем (кадр 16 мс), так что захват, падение, отверстия и распил происходят
+   по-настоящему и отметки выполнения выставляются сами. Камера не трогается. */
+function rollbackLog(k) {
+  if (!chal) return;
+  stopReplay();
+  chal.log.length = k;
+  chal.replay = { idx: -1, until: 0, cur: null, t0: 0, dur: 0 };
+  replayReset();
+  let now = chal.lastNow;
+  for (let guard = 0; guard < 60000; guard++) {
+    const r = chal.replay, next = now + 16;
+    /* шаг k-1 доигран и пауза после него выдержана — следующий тик взял бы запись k */
+    if (r.idx >= k - 1 && !r.cur && next >= r.until) break;
+    now = next;
+    challengeTick(now);
+  }
+  chal.replay = null;
+  chal.lastNow = chal.lastHud = 0; // следующий живой кадр — с нулевым dt
+  renderLog();
+  renderChalHUD();
+  invalidate();
+}
+
+function askRollback(k) {
+  if (!chal || chal.replay || k >= chal.log.length) return;
+  showModal(t('logBackTitle'), t('logBackText', k, chal.log.length), [
+    { label: t('logBackNo'), cb: hideTutModal, primary: true },
+    { label: t('logBackYes'), cb: () => { hideTutModal(); rollbackLog(k); } },
+  ]);
+}
+
 function actionLabel(a) {
   if (a.kind === 'param') {
     const ty = TYPES[a.type], p = ty.params.find(q => q.key === a.key);
     return `${iconSVG(a.type, 14)} ${t('logParam', tr(ty.label), a.i + 1, tr(p.label), quantParam(a.from, p), quantParam(a.to, p))}`;
+  }
+  if (a.kind === 'pose') {
+    const parts = a.items.map(x => {
+      const ty = TYPES[x.type], p = ty.params.find(q => q.key === x.key);
+      return t('logParam', tr(ty.label), x.i + 1, tr(p.label), quantParam(x.from, p), quantParam(x.to, p));
+    });
+    return `🎯 ${t('logPose')} ${parts.join('; ')}`;
   }
   if (a.kind === 'add') return `${iconSVG(a.comp.type, 14)} ${t('logAdd', tr(TYPES[a.comp.type].label))}`;
   if (a.kind === 'del') return `${iconSVG(a.comp.type, 14)} ${t('logDel', tr(TYPES[a.comp.type].label), a.i + 1)}`;
@@ -4350,6 +4451,15 @@ function renderLog() {
     const r = chal.replay;
     row.className = 'act' + (r && i === r.idx ? ' cur' : '') + (r && i < r.idx ? ' past' : '');
     row.innerHTML = `<span class="act-n">${i + 1}</span><span class="act-txt">${actionLabel(a)}</span>`;
+    /* стрелка отката — на всех шагах, кроме последнего (откат до него ничего не меняет) */
+    if (i < chal.log.length - 1) {
+      const back = document.createElement('button');
+      back.className = 'act-back';
+      back.title = t('logBack');
+      back.textContent = '↶';
+      back.onclick = () => askRollback(i + 1);
+      row.appendChild(back);
+    }
     actList.appendChild(row);
   });
   const cur = actList.querySelector('.act.cur');
@@ -4394,11 +4504,15 @@ function stopReplay() {
 function replayTick(now) {
   const r = chal.replay;
   if (r.cur) {
-    /* плавное движение слайдера */
-    const a = r.cur, c = components[a.i], k = Math.min(1, (now - r.t0) / r.dur);
-    if (c && c.type === a.type) {
-      setParamChecked(c, a.key, a.from + (a.to - a.from) * k);
-      syncSlider(c, a.key);
+    /* плавное движение слайдера (или всей позы IK) */
+    const a = r.cur, k = Math.min(1, (now - r.t0) / r.dur);
+    if (a.kind === 'pose') applyPose(a.items, k, false);
+    else {
+      const c = components[a.i];
+      if (c && c.type === a.type) {
+        setParamChecked(c, a.key, a.from + (a.to - a.from) * k);
+        syncSlider(c, a.key);
+      }
     }
     if (k < 1) return;
     r.cur = null;
@@ -4418,11 +4532,14 @@ function replayTick(now) {
   }
   const a = chal.log[r.idx];
   renderLog();
+  const span = x => { const p = TYPES[x.type].params.find(q => q.key === x.key); return Math.abs(x.to - x.from) / (p.max - p.min); };
   const bp = a.kind === 'param' ? TYPES[a.type].params.find(q => q.key === a.key) : null;
-  if (bp && !bp.build) {
-    const p = bp;
+  if (a.kind === 'pose') {
     r.cur = a; r.t0 = now;
-    r.dur = 300 + 900 * Math.abs(a.to - a.from) / (p.max - p.min);
+    r.dur = 300 + 900 * Math.max(...a.items.map(span));
+  } else if (bp && !bp.build) {
+    r.cur = a; r.t0 = now;
+    r.dur = 300 + 900 * span(a);
   } else {
     applyAction(a, false); // структурные шаги и габариты — сразу
     r.until = now + 500;
