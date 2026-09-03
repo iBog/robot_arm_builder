@@ -38,7 +38,7 @@ three.js на CDN — ES-модуль, а ES-модули с диска Chrome �
 
 | Блок | Файлы | Что там |
 |------|-------|---------|
-| 0xx | `000-consts` `010-i18n` `020-scene-theme` `030-types` `040-geom` `050-icons` `060-state` | версия и адрес ссылок, строки `STR`/`t()`, палитра сцены, реестры `TYPES`/`GEOM`/`ICONS`, массив `components` |
+| 0xx | `000-consts` `010-i18n` `020-scene-theme` `030-types` `040-geom` `045-style` `050-icons` `060-state` | версия и адрес ссылок, строки `STR`/`t()`, палитра сцены, реестры `TYPES`/`GEOM`, стили деталей `STYLES` и объём печати, `ICONS`, массив `components` |
 | 1xx | `100-scene` `110-build-arm` | сцена three.js, камера, `buildArm()`, зоны, `applyParam3D()` |
 | 2xx | `200-panel` `210-start-hint` `220-camera-fit` `230-generate` `240-new-project` `250-tabs` | панель карточек и слайдеры, подсказка старта, авто-кадрирование, генератор, новый проект, вкладки |
 | 3xx | `300-parts-catalog` `310-bom` | **данные**: каталог деталей `PARTS` (цены, ссылки), замены `ALTS`, состав `NEEDS` — пополняется без правки кода; движок BOM, `checkCatalog()`, корзина |

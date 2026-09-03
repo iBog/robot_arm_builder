@@ -6,7 +6,7 @@ function armMinY() {
   let minY = Infinity;
   armRoot.updateWorldMatrix(true, true);
   armRoot.traverse(o => {
-    if (o.userData.zone) return;
+    if (o.userData.zone || o.userData.decorative) return;
     for (let p = o.parent; p && p !== armRoot; p = p.parent) if (p.userData.zone) return;
     const g = o.geometry;
     if (!o.isMesh || !g) return;

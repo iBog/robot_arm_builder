@@ -37,6 +37,7 @@ const swaps = {};
 function usedPart(key) { return swaps[key] || key; }
 const bomTable = document.getElementById('bomTable');
 const armNameEl = document.getElementById('armName');
+const printInfo = document.getElementById('printInfo');
 
 /* название руки в принятой номенклатуре: «N-осевой манипулятор с захватом» */
 function armName() {
@@ -88,13 +89,21 @@ function bomGroups() {
     g.count++;
     for (const [key, n] of Object.entries(needs)) g.parts[key] = (g.parts[key] || 0) + n;
   }
+  /* печать — по массе: NEEDS лишь отмечает, что деталь печатная, количество (в единицах
+     по 100 г) считается из объёма форм компонента и текущего стиля */
+  const printQty = grams => Math.max(0.1, Math.round(grams / PRINT_UNIT_G * 10) / 10);
+  for (const [type, g] of byType) if (g.parts.print) {
+    g.grams = components.filter(c => c.type === type).reduce((s, c) => s + partPrint(c).grams, 0);
+    g.parts.print = printQty(g.grams);
+  }
   const groups = [...byType.values()];
   if (components.length) {
-    /* базовая электроника — один комплект на руку, по конденсатору на драйвер */
+    /* базовая электроника — один комплект на руку, по конденсатору на драйвер; основание печатное */
     const drivers = groups.reduce((s, g) => s + (g.parts.tmc2209 || 0), 0);
-    const parts = { esp32: 1, buck: 1, psu: 1, hw: 1 };
+    const grams = basePrint().grams;
+    const parts = { esp32: 1, buck: 1, psu: 1, hw: 1, print: printQty(grams) };
     if (drivers) parts.cap = drivers;
-    groups.push({ label: t('bomBase'), count: 1, parts });
+    groups.push({ label: t('bomBase'), count: 1, parts, grams });
   }
   return groups;
 }
@@ -121,6 +130,10 @@ function updateBOM() {
   armNameEl.textContent = `🦾 ${tr(name)}`;
 
   const groups = bomGroups();
+  const pr = armPrint();
+  printInfo.textContent = components.length
+    ? t('printInfo', tr(STYLE.label), pr.cm3, pr.grams, fmt$(pr.grams / PRINT_UNIT_G * PARTS[usedPart('print')].price))
+    : '';
   if (!groups.length) {
     bomTable.innerHTML = `<tr><td>${t('bomEmpty')}</td></tr>`;
     renderCart();
@@ -155,7 +168,7 @@ function updateBOM() {
     if (!rows) return;
     total += sub;
     html += `<tr class="group">
-      <td colspan="3">${g.label}${g.count > 1 ? ` <span class="mult">×${g.count}</span>` : ''}
+      <td colspan="3">${g.label}${g.count > 1 ? ` <span class="mult">×${g.count}</span>` : ''}${g.grams ? ` <span class="grams">${g.grams} ${t('gramsShort')}</span>` : ''}
         <button class="cart-btn cart-group" data-group="${gi}" title="${t('cartAddGroupTip')}">${t('cartAddGroup')}</button></td>
       <td class="num">${fmt$(sub)}</td>
       <td></td>
@@ -177,8 +190,8 @@ function updateBOM() {
     };
   }
   /* в корзину: строка (в количестве строки, деталь — с учётом замены), секция, весь список */
-  const groupParts = g => Object.entries(g.parts).map(([key, n]) => [usedPart(key), n]);
-  for (const b of bomTable.querySelectorAll('.cart-add')) b.onclick = () => cartAdd([[b.dataset.part, +b.dataset.n]]);
+  const groupParts = g => Object.entries(g.parts).map(([key, n]) => [usedPart(key), Math.ceil(n)]); // печать — дробные сотни граммов
+  for (const b of bomTable.querySelectorAll('.cart-add')) b.onclick = () => cartAdd([[b.dataset.part, Math.ceil(+b.dataset.n)]]);
   for (const b of bomTable.querySelectorAll('.cart-group')) b.onclick = () => cartAdd(groupParts(groups[+b.dataset.group]));
   bomTable.querySelector('.cart-all').onclick = () => cartAdd(groups.flatMap(groupParts));
   renderCart();

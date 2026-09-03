@@ -37,3 +37,18 @@ function setTheme(th) {
 for (const b of document.querySelectorAll('#themeSw button')) {
   b.onclick = () => setTheme(b.dataset.theme);
 }
+
+/* ---- Стиль деталей (см. 045-style.js): форма меняется пересборкой руки ---- */
+function applyStyle() {
+  STYLE = STYLES[style];
+  for (const b of document.querySelectorAll('#styleSw button')) b.classList.toggle('active', b.dataset.style === style);
+}
+function setStyle(st) {
+  if (!STYLES[st] || st === style) return;
+  style = st;
+  styleChosen = true;
+  try { localStorage.setItem(STYLE_KEY, st); } catch { /* file:// без хранилища */ }
+  applyStyle();
+  buildArm(); // форма деталей и объём печати (BOM) зависят от стиля
+}
+for (const b of document.querySelectorAll('#styleSw button')) b.onclick = () => setStyle(b.dataset.style);

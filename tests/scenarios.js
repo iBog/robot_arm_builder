@@ -560,6 +560,36 @@ const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { 
     api.challenge.stop();
     expect(api.share.decode(api.share.encode(cfg)).length === 4 && api.share.short().includes('?s='), 'share.encode/decode/short');
   }
+  /* ---------- стили деталей: сборка всех типов, столкновения, пол, печать в BOM, ссылка ---------- */
+  if (SCEN === 'style') {
+    const ALL = Object.keys(TYPES).map(type => { const c = { type }; for (const p of TYPES[type].params) c[p.key] = p.def; return c; });
+    const grams = {}, tips = {};
+    for (const st of STYLE_LIST) {
+      setStyle(st);
+      expect(style === st && STYLE === STYLES[st] && document.querySelector(`#styleSw button[data-style="${st}"]`).classList.contains('active'), `стиль ${st} включён`);
+      setArm(ALL);
+      let meshes = 0; armRoot.traverse(o => { if (o.isMesh) meshes++; });
+      const caps = buildCapsules(), minY = armMinY();
+      expect(meshes >= 20 && caps.length >= 15 && isFinite(minY) && minY > -0.01, `${st}: ${meshes} мешей, ${caps.length} капсул, пол ${minY.toFixed(3)}`);
+      tips[st] = f3(armTip()).join();
+      grams[st] = armPrint().grams;
+      const g = bomGroups(), pg = g.find(x => x.parts.print && x.grams);
+      expect(pg && pg.parts.print > 0 && pg.grams > 0 && g[g.length - 1].parts.print > 0, `${st}: печать в BOM ${pg && pg.parts.print} × 100 г, основание ${g[g.length - 1].parts.print}`);
+      updateBOM();
+      expect(printInfo.textContent.includes(String(grams[st])), `${st}: сводка печати «${printInfo.textContent}»`);
+    }
+    expect(tips.frame === tips.smooth && tips.frame === tips.shell, 'кинематика от стиля не зависит: конец руки на месте');
+    expect(grams.smooth > grams.frame && grams.shell > grams.frame, `масса печати: каркас ${grams.frame} г < гладкий ${grams.smooth} г, корпус ${grams.shell} г`);
+    expect(shareURL().includes('style=shell'), 'выбранный стиль уходит в ссылку');
+    /* геометрия скруглённых деталей описывается как цилиндр/коробка — столкновения видят те же габариты */
+    setStyle('smooth'); setArm([{ type: 'yaw', angle: 0 }, { type: 'link', length: 1 }]);
+    const link = armRoot.getObjectByProperty('type', 'Mesh');
+    let boxes = 0; armRoot.traverse(o => { if (o.isMesh && o.geometry.type === 'BoxGeometry' && o.geometry.parameters.height === 1) boxes++; });
+    expect(boxes === 1, 'звено-лепесток видно столкновениям как коробка высотой 1');
+    setStyle('frame');
+    expect(buildCapsules().length > 0 && style === 'frame', 'возврат к каркасу');
+    void link;
+  }
   /* ---------- двойник: команды по каналу, ответы с id, отправка позы, state от руки ---------- */
   if (SCEN === 'twin') {
     setArm([{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 1 }, { type: 'roll', angle: 0 }, { type: 'gripper', open: 50 }]);
@@ -631,7 +661,7 @@ const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { 
     expect(cart.nema17 === 2, 'повторное «+» добавляет ещё');
     const groups = bomGroups(), gi = groups.findIndex(g => g.parts.leadscrew); // группа схвата
     bomTable.querySelector(`.cart-group[data-group="${gi}"]`).click();
-    expect(cart.nema14 === 1 && cart.leadscrew === 1 && cart.tmc2209 === 1 && cart.print === 1, '«+ секция» кладёт все детали секции');
+    expect(cart.nema14 === 1 && cart.leadscrew === 1 && cart.tmc2209 === 1 && cart.print >= 1, '«+ секция» кладёт все детали секции (печать — по массе, округлена вверх)');
     swaps.tmc2209 = 'a4988'; updateBOM();
     expect(!!bomTable.querySelector('.cart-add[data-part="a4988"]'), 'кнопка строки знает выбранную замену');
     add('a4988');

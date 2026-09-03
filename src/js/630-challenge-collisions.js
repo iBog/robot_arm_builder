@@ -39,7 +39,7 @@ function armCapsules(skip) {
 function buildCapsules() {
   const caps = [];
   armRoot.traverseVisible(o => {
-    if (!o.isMesh || !o.geometry?.parameters) return;
+    if (!o.isMesh || o.userData.decorative || !o.geometry?.parameters) return;
     const anc = [];
     for (let p = o.parent; p && p !== armRoot; p = p.parent) anc.push(p);
     const g = o.geometry, p = g.parameters;

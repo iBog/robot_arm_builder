@@ -2,10 +2,10 @@
 /* ---- Ссылка на текущую конфигурацию: цифровой код в параметре ?c= ---- */
 
 /* Язык и тема попадают в ссылку, если заданы явно: пришли из ссылки при открытии
-   или переключены в процессе работы (флаги langChosen/themeChosen). Иначе
+   или переключены в процессе работы (флаги langChosen/themeChosen/styleChosen). Иначе
    получатель откроет страницу со своими настройками. */
 function shareExtras() {
-  return (langChosen ? `&lang=${lang}` : '') + (themeChosen ? `&theme=${theme}` : '');
+  return (langChosen ? `&lang=${lang}` : '') + (themeChosen ? `&theme=${theme}` : '') + (styleChosen ? `&style=${style}` : '');
 }
 function shareURL() {
   return `${SHARE_BASE}?c=${groupCode(encodeArmCode())}${shareExtras()}`;

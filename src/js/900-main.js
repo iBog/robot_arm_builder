@@ -3,6 +3,7 @@
 
 applyI18n();
 applyTheme();
+applyStyle();
 syncAnimToggle();
 syncFitToggle();
 checkCodeSpec(); // формат ссылок не должен разъезжаться с TYPES
@@ -23,7 +24,7 @@ if (urlParam('debug') !== null) {
     ik: { on: setIK, solve: (x, y, z) => ikSolve(new THREE.Vector3(x, y, z)), get miss() { return ikMiss?.target.toArray() ?? null; } },
     tick(now) { if (chal) challengeTick(now); },
     state: () => ({
-      version: VERSION, lang, theme, components: cleanConfig(), tip: armTip().toArray(), minY: armMinY(),
+      version: VERSION, lang, theme, style, print: armPrint(), components: cleanConfig(), tip: armTip().toArray(), minY: armMinY(),
       challenge: chal ? { task: chal.task, done: [...chal.done], held: chal.held?.h.kind ?? null,
                           log: chal.log.length, replaying: !!chal.replay } : null,
     }),
@@ -32,7 +33,7 @@ if (urlParam('debug') !== null) {
              encodeStruct: encodeStructCode, decodeStruct: decodeStructCode },
     cart: { get data() { return { ...cart }; }, add: cartAdd, clear: cartClear, text: cartText },
     twin: { addLink: twinAddLink, removeLink: twinRemoveLink, handle: twinHandle, get links() { return twin.links; }, get state() { return twinStateMessage(); } },
-    setLang, setTheme, THREE, scene, camera, controls, renderer,
+    setLang, setTheme, setStyle, THREE, scene, camera, controls, renderer,
   };
 }
 const fromLink = loadFromURL(); // рука из ссылки — раньше первой сборки

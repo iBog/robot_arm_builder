@@ -10,6 +10,7 @@ function applyI18n() {
   document.getElementById('metaDesc').content = t('metaDesc');
   document.getElementById('appTitle').textContent = t('appTitle');
   document.getElementById('version').textContent = 'v' + VERSION;
+  for (const b of document.querySelectorAll('#styleSw button')) b.title = t('styleTip', tr(STYLES[b.dataset.style].label));
   for (const b of document.querySelectorAll('#themeSw button')) {
     b.title = t(b.dataset.theme === 'dark' ? 'themeDark' : 'themeLight');
   }

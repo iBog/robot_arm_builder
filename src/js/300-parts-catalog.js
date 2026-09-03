@@ -94,9 +94,12 @@ const PARTS = {
   drillbits:  { ru: 'Свёрла 1–6 мм (набор)',           en: 'Drill bit set 1–6 mm',        price: 5 },
   millbits:   { ru: 'Фрезы по дереву/пластику (набор)', en: 'End mill set (wood/plastic)', price: 9 },
   /* --- корпусные детали и мелочь --- */
-  print:      { ru: '3D-печать: деталь (пластик)',      en: '3D-printed part',             price: 4 },
-  laser:      { ru: 'Лазерная резка: фанера',           en: 'Laser-cut plywood part',      price: 3 },
-  alu:        { ru: 'Фрезерованная деталь, алюминий',   en: 'Machined aluminium part',     price: 25 },
+  /* печать считается по массе: количество в BOM = граммы / 100 (объём — из GEOM и стиля, 045-style.js) */
+  print:      { ru: '3D-печать: пластик PLA, 100 г',    en: '3D printing: PLA, 100 g',     price: 2.5 },
+  petg:       { ru: '3D-печать: PETG, 100 г',           en: '3D printing: PETG, 100 g',    price: 3 },
+  abs:        { ru: '3D-печать: ABS/ASA, 100 г',        en: '3D printing: ABS/ASA, 100 g', price: 3 },
+  resin:      { ru: 'Фотополимер SLA, 100 г',           en: 'SLA resin, 100 g',            price: 5 },
+  nylon:      { ru: 'Нейлон SLS (сервис печати), 100 г', en: 'SLS nylon (print service), 100 g', price: 12 },
   cap:        { ru: 'Конденсатор 1000 мкФ',             en: 'Capacitor 1000 µF',           price: 0.5 },
   hw:         { ru: 'Крепёж M3, провода, разъёмы',      en: 'M3 hardware, wires',          price: 10 },
 };
@@ -119,7 +122,7 @@ const ALTS = {
   buck:      ['lm2596', 'ubec'],
   pump:      ['venturi', 'aquapump'],
   relay:     ['mosfet'],
-  print:     ['laser', 'alu'],
+  print:     ['petg', 'abs', 'resin', 'nylon'],
 };
 
 /* Что нужно докупить на каждый компонент руки.

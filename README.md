@@ -142,6 +142,16 @@ built from primitives (cylinders, boxes, spheres), so there are no external mesh
 - **Pose.** URDF describes a model, not a pose, so the current slider values are listed in the
   header comment — copy them into a `joint_states` message if you need this exact posture.
 
+## Part styles
+
+The switch next to the theme toggles the look of the parts: **Frame** (cylinders and boxes),
+**Smooth** (a printed monolithic arm with matte filleted links, recessed side panels, bearing
+hubs, visible fasteners and a bolted base flange) and **Enclosed** (glossy white segmented capsule
+housings, metal collars and detailed external motors). The style also
+changes the 3D-printing estimate in the BOM: the print line is priced by mass (grams of PLA from
+the part volumes), with a cm³ / grams / price summary under the arm name. Kinematics, URDF and
+share codes do not depend on the style; `?style=` in a link selects it.
+
 ## Digital twin, external control, MCP
 
 The **Twin** tab links the 3D arm with the outside world. Every pose change (slider, IK drag,
