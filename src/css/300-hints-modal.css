@@ -1,0 +1,91 @@
+/* ---- Свёрнутая панель: от Parts/JSON/BOM остаются только кнопки
+   Generate / Start New; на десктопе колонка сужается под них ---- */
+body.panelCollapsed { grid-template-columns: 1fr 230px; }
+body.panelCollapsed #sidebar > :not(#genRow) { display: none; }
+body.panelCollapsed #genRow { margin-bottom: 10px; }
+/* Подсказка после «Start New Project»: стрелка вверх, на кнопки добавления */
+#startHint {
+  position: absolute; top: 14px; left: 132px; z-index: 3;
+  max-width: 270px;
+  background: var(--panel2); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 8px;
+  padding: 8px 11px; font-size: 12.5px; line-height: 1.4;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+  cursor: pointer; animation: hintIn .25s ease-out;
+}
+#startHint::before {
+  content: ''; position: absolute; top: -7px; left: 20px;
+  width: 12px; height: 12px; background: var(--panel2);
+  border-left: 1px solid var(--accent); border-top: 1px solid var(--accent);
+  transform: rotate(45deg);
+}
+#startHint:hover { border-color: var(--text); }
+/* вариант-предупреждение: битый код в ссылке */
+#startHint.warn { border-color: var(--danger); }
+#startHint.warn::before { border-left-color: var(--danger); border-top-color: var(--danger); }
+/* ---- Подсказка шага обучения — стиль как у #startHint ---- */
+#tutHint, #ikHint {
+  position: absolute; top: 58px; left: 12px; z-index: 3; /* ниже ряда кнопок #vpTools */
+  max-width: 320px;
+  background: var(--panel2); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 8px;
+  padding: 8px 11px; font-size: 12.5px; line-height: 1.45;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+  animation: hintIn .25s ease-out;
+}
+#ikHint { border-color: var(--danger); }
+#ikHint[hidden] { display: none; }
+#ikHint b { color: var(--danger); }
+#tutHint::before, #ikHint::before {
+  content: ''; position: absolute; top: -7px; left: 20px;
+  width: 12px; height: 12px; background: var(--panel2);
+  border-left: 1px solid var(--accent); border-top: 1px solid var(--accent);
+  transform: rotate(45deg);
+}
+#tutHint .tut-step { color: var(--accent); font-weight: 700; }
+#ikHint::before { border-left-color: var(--danger); border-top-color: var(--danger); }
+#tutHint .tut-exit, #ikHint .tut-exit {
+  float: right; margin-left: 8px; cursor: pointer;
+  color: var(--muted); font-weight: 700;
+}
+#tutHint .tut-exit:hover, #ikHint .tut-exit:hover { color: var(--danger); }
+/* подсвеченная кнопка-цель текущего шага */
+#addRow button.tut-target {
+  /* !important: перебиваем инлайновый цвет рамки, заданный кнопке по типу */
+  border-color: var(--accent) !important;
+  animation: tutPulse 1.2s ease-in-out infinite;
+}
+@keyframes tutPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 7px var(--accent-soft); }
+}
+/* ---- Модальный диалог обучения ---- */
+#tutModal {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .45);
+}
+#tutModal[hidden] { display: none; }
+.tut-box {
+  max-width: 460px; margin: 16px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .4);
+}
+.tut-box h3 { font-size: 16px; margin-bottom: 8px; }
+.tut-box p { font-size: 13.5px; line-height: 1.5; white-space: pre-line; }
+.tut-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.tut-actions button {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel2); color: var(--text);
+  padding: 9px 12px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  text-align: left;
+}
+.tut-actions button:hover { border-color: var(--accent); }
+.tut-actions button.primary {
+  background: linear-gradient(135deg, #2b6cb0, #4da3ff);
+  border: none; color: #fff;
+}
+.tut-actions button.primary:hover { filter: brightness(1.15); }
+@keyframes hintIn { from { opacity: 0; transform: translateY(-8px); } }
+#animToggle input { accent-color: var(--accent); width: 17px; height: 17px; cursor: pointer; }

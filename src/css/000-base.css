@@ -1,0 +1,58 @@
+/* Светлая тема — по умолчанию; светло-серые тона 3D-редакторов (3ds Max) */
+:root {
+  color-scheme: light; /* нативные списки и скроллбары в тон теме */
+  --bg: #e9eaec;
+  --panel: #f3f4f6;
+  --panel2: #e2e4e8;
+  --border: #c2c6cc;
+  --border-soft: rgba(120, 128, 138, .32);
+  --text: #22262c;
+  --muted: #666d77;
+  --accent: #1f6fd0;
+  --accent-soft: rgba(31, 111, 208, .14);
+  --danger: #cf3a35;
+  --ok: #1f8a52;
+  --code: #2f6d2e;
+  --overlay: rgba(243, 244, 246, .88);
+}
+/* Тёмная тема */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14171c;
+  --panel: #1d222a;
+  --panel2: #232a34;
+  --border: #313a47;
+  --border-soft: rgba(49, 58, 71, .45);
+  --text: #e6ebf2;
+  --muted: #8b97a8;
+  --accent: #4da3ff;
+  --accent-soft: rgba(77, 163, 255, .18);
+  --danger: #ff5c5c;
+  --ok: #57d98a;
+  --code: #b9e3a6;
+  --overlay: rgba(29, 34, 42, .82);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    "header   header"
+    "toolbar  sidebar"
+    "viewport sidebar";
+  height: 100vh;
+  height: 100dvh; /* планшеты/мобильные: 100vh уходит под панель браузера */
+  overflow: hidden;
+}
+#viewport { grid-area: viewport; position: relative; min-width: 0; min-height: 0; }
+#viewport canvas { display: block; }
+#hint {
+  position: absolute; left: 12px; bottom: 44px; /* над кнопкой Challenge */
+  color: var(--muted); font-size: 12px; pointer-events: none;
+}
+body.challenge #hint { display: none; }

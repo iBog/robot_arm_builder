@@ -1,0 +1,63 @@
+/* ---- Правая панель ---- */
+#sidebar {
+  grid-area: sidebar;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+/* ---- Шапка: заголовок, версия, тема и язык — во всю ширину, над всем ---- */
+#topbar {
+  grid-area: header;
+  background: var(--panel);
+  font-size: 14px; font-weight: 600;
+  padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+#titleWrap {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px;
+}
+#appTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#version {
+  flex: none; font-size: 10px; font-weight: 600; color: var(--muted);
+  background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 4px; letter-spacing: .02em;
+}
+/* ---- Переключатели темы и языка ---- */
+#themeSw, #langSw {
+  flex: none; display: flex; border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden;
+}
+#themeSw button, #langSw button {
+  background: var(--panel2); color: var(--muted); border: none;
+  padding: 4px 6px; font-size: 10.5px; font-weight: 700; cursor: pointer;
+  letter-spacing: .04em; display: inline-flex; align-items: center;
+}
+#themeSw button:hover, #langSw button:hover { color: var(--text); }
+#themeSw button.active, #langSw button.active { background: var(--accent); color: #10141a; }
+#addRow {
+  grid-area: toolbar;
+  background: var(--panel);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+/* кнопки узкие: двенадцать типов должны укладываться в одну строку на десктопе */
+#addRow button {
+  background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 6px 9px; cursor: pointer; font-size: 12.5px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.ico { flex: none; display: inline-block; vertical-align: -3px; }
+#addRow button:hover { filter: brightness(1.25); }
+#genRow {
+  display: flex; flex-direction: column; gap: 8px; margin: 10px 14px 0;
+}
+#genRow button {
+  border: none; border-radius: 8px; padding: 8px 12px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+#genRow button:hover { filter: brightness(1.15); }
+#btnGenerate { background: linear-gradient(135deg, #2b6cb0, #4da3ff); color: #fff; }
+#btnNew { background: linear-gradient(135deg, #2f8f57, #57d98a); color: #10141a; }

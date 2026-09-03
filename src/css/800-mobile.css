@@ -1,0 +1,38 @@
+/* ---- Мобильный режим: тулбар компонентов сверху, 3D — главный, панель снизу ---- */
+@media (max-width: 720px) {
+  body {
+    grid-template-columns: minmax(0, 1fr); /* min-content контента не должен распирать колонку */
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header"
+      "toolbar"
+      "viewport"
+      "sidebar";
+    height: 100vh;
+    height: 100dvh; /* мобильные браузеры: без скрытия за адресной строкой */
+  }
+  #addRow {
+    flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    padding: 8px 10px; gap: 6px; -webkit-overflow-scrolling: touch;
+  }
+  #addRow button { flex: none; }
+  #sidebar {
+    border-left: none; border-top: 1px solid var(--border);
+    max-height: 45dvh; min-height: 0;
+  }
+  #genRow { flex-direction: row; margin: 8px 10px 0; }
+  #genRow button {
+    flex: 1; min-width: 0; padding: 7px 8px; font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #topbar { flex-wrap: wrap; row-gap: 6px; }
+  #hint { display: none; }
+  #animToggle, #btnShare { padding: 6px 10px; font-size: 12.5px; }
+  #startHint { left: 12px; right: 12px; max-width: none; }
+  #tutHint, #ikHint { top: 96px; left: 12px; right: 12px; max-width: none; } /* под двумя рядами кнопок */
+  #chalPanel { right: 12px; width: auto; max-height: 45%; font-size: 12px; }
+  /* свёрнутая панель на мобильном: колонка одна, снизу только кнопки */
+  body.panelCollapsed { grid-template-columns: minmax(0, 1fr); }
+  body.panelCollapsed #genRow { margin-bottom: 8px; }
+  #jsonText, #urdfText { min-height: 120px; }
+}

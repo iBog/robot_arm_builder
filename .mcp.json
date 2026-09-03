@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "robo-arm-twin": {
+      "command": "node",
+      "args": [
+        "tools/twin-mcp.mjs"
+      ]
+    }
+  }
+}

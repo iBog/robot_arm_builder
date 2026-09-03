@@ -6,7 +6,10 @@ const GOLDEN = '__GOLDEN__';
 const LOG = [];
 /* детерминированные прогоны: солвер поз использует случайные рестарты */
 Math.random = (seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; })(20260902);
-window.addEventListener('error', e => { LOG.push('ERR ' + e.message + ' @' + e.lineno); flush(); });
+window.addEventListener('error', e => {
+  if (/^ResizeObserver loop/.test(e.message)) return; // безвредное предупреждение Chrome, не ошибка страницы
+  LOG.push('ERR ' + e.message + ' @' + e.lineno); flush();
+});
 function flush() {
   let pre = document.getElementById('testlog');
   if (!pre) { pre = document.createElement('pre'); pre.id = 'testlog'; document.body.appendChild(pre); }
@@ -76,7 +79,9 @@ const GRIP_ARM = [{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type
 const held = () => !!chal.held;
 const hashStr = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(16); };
 
-await (async () => { try {
+/* без внешнего await: сценарий внедряется в обычный <script>, где top-level await недопустим;
+   до первого await внутри всё выполняется синхронно, как и прежде */
+(async () => { try {
   /* ---------- золотой снимок геометрии и URDF: ловит регрессии в размерах деталей ---------- */
   if (SCEN === 'golden') {
     const ARMS = [
@@ -554,6 +559,106 @@ await (async () => { try {
     expect(api.state().challenge?.task === 0 && api.challenge.data.holdables.length === 1, 'challenge.start + tick');
     api.challenge.stop();
     expect(api.share.decode(api.share.encode(cfg)).length === 4 && api.share.short().includes('?s='), 'share.encode/decode/short');
+  }
+  /* ---------- двойник: команды по каналу, ответы с id, отправка позы, state от руки ---------- */
+  if (SCEN === 'twin') {
+    setArm([{ type: 'yaw', angle: 0 }, { type: 'pitch', angle: 0 }, { type: 'link', length: 1 }, { type: 'roll', angle: 0 }, { type: 'gripper', open: 50 }]);
+    const sent = [], sent2 = [];
+    const fake = { kind: 'ws', name: 'test', send: t => sent.push(JSON.parse(t)), close() {} };
+    const fake2 = { kind: 'serial', name: 'test2', send: t => sent2.push(JSON.parse(t)), close() {} };
+    twinAddLink(fake);
+    expect(sent.some(m => m.type === 'move_all' && m.angles.join() === '0,0,0') && sent.some(m => m.type === 'gripper' && m.open === 50), 'новому каналу уходит поза целиком');
+    expect(twinStatus.classList.contains('on') && document.querySelector('#tabs button[data-tab="twinarea"]').classList.contains('linked'), 'статус и точка на вкладке');
+    sent.length = 0;
+    chkAnimate.checked = true;
+    twinHandle('{"type":"move_all","angles":[30,null,-20]}', fake);
+    expect(components[0].angle === 30 && components[1].angle === 0 && components[3].angle === -20, 'move_all: null оставляет ось как есть');
+    expect(!chkAnimate.checked, 'внешняя команда выключает авто-анимацию');
+    twinHandle('{"type":"set_joint","joint":2,"angle":45}\n{"type":"gripper","open":10}', fake);
+    expect(components[1].angle === 45 && components[4].open === 10, 'set_joint и gripper — по одному JSON на строку');
+    expect(components[1]._sliders.angle.slider.value === '45', 'слайдер следует за командой');
+    twinHandle('{"type":"get_state","id":"q1"}', fake);
+    const st = sent.find(m => m.type === 'state');
+    expect(st && st.id === 'q1' && st.source === '3d' && st.angles.join() === '30,45,-20' && st.open === 10 && st.axes.length === 3 && st.axes[1].joint === 2 && st.axes[1].type === 'pitch', 'get_state: id, source, оси по порядку');
+    sent.length = 0;
+    twinTick(performance.now() + 1000);
+    expect(sent.some(m => m.type === 'move_all' && m.angles.join() === '30,45,-20') && sent.some(m => m.type === 'gripper' && m.open === 10), 'изменённая поза ушла в канал');
+    sent.length = 0;
+    twinTick(performance.now() + 2000);
+    expect(!sent.length, 'без изменений ничего не шлётся');
+    setParamChecked(components[0], 'angle', 60); twinTick(performance.now() + 3000);
+    expect(sent.length === 1 && sent[0].type === 'move_all' && sent[0].angles[0] === 60, 'слайдер → move_all, схват без изменений не шлётся');
+    twin.lastSendAt = 0; sent.length = 0;
+    twinHandle('{"type":"state","angles":[5,5,5],"open":90,"moving":false}', fake);
+    expect(components[0].angle === 5 && components[4].open === 90 && twin.armState.angles[2] === 5, 'state от руки применён (приём включён, страница простаивает)');
+    twinTick(performance.now() + 4000);
+    expect(!sent.length, 'принятое положение не уходит обратно');
+    twin.lastSendAt = performance.now();
+    twinHandle('{"type":"state","angles":[7,7,7]}', fake);
+    expect(components[0].angle === 5, 'state сразу после своей отправки игнорируется');
+    twin.lastSendAt = 0; twin.recv = false;
+    twinHandle('{"type":"state","angles":[8,8,8]}', fake);
+    expect(components[0].angle === 5 && twin.armState.angles[0] === 8, 'приём выключен: состояние запомнено, рука не двигается');
+    twin.recv = true;
+    twinHandle('{"type":"state","source":"3d","angles":[9,9,9]}', fake);
+    expect(components[0].angle === 5, 'state другой страницы (source 3d) не применяется');
+    twinAddLink(fake2); sent2.length = 0; sent.length = 0;
+    twinHandle('{"type":"home"}', fake);
+    expect(components[0].angle === 0 && components[1].angle === 0 && components[4].open === TYPES.gripper.params.find(p => p.key === 'open').def, 'home: оси в исходное');
+    expect(sent2.some(m => m.type === 'home') && !sent.some(m => m.type === 'home'), 'home пересылается другим каналам, но не отправителю');
+    twinHandle('{"type":"ik","id":"k","target":[0.5,1.2,0.3]}', fake);
+    const ik = sent.find(m => m.type === 'ik_result');
+    expect(ik && ik.id === 'k' && typeof ik.reached === 'boolean' && ik.tip.length === 3, `ik: ответ ${ik && JSON.stringify(ik)}`);
+    twinHandle('{"type":"nope","id":"e"}', fake);
+    expect(sent.some(m => m.type === 'error' && m.id === 'e'), 'неизвестный тип → error с тем же id');
+    twinHandle('{"type":"set_arm","id":"a","components":[{"type":"yaw","angle":0},{"type":"gripper","open":20}]}', fake);
+    expect(components.length === 2 && sent.some(m => m.type === 'arm' && m.id === 'a' && m.components.length === 2), 'set_arm перестраивает руку и отвечает составом');
+    expect(undoStack.length > 0, 'set_arm можно отменить');
+    twinRenderAxes(true);
+    expect(twinAxesEl.querySelectorAll('tr').length === 3, 'таблица осей: шапка + J1 + G');
+    twinRemoveLink(fake); twinRemoveLink(fake2);
+    expect(twin.links.length === 0 && !twinStatus.classList.contains('on'), 'каналы закрыты');
+  }
+  /* ---------- корзина BOM: строка, секция, всё, замена, количество, удаление, хранение ---------- */
+  if (SCEN === 'cart') {
+    expect(checkCatalog(), 'каталог деталей согласован (PARTS/ALTS/NEEDS)');
+    cartClear();
+    setArm([{ type: 'yaw', angle: 0 }, { type: 'link', length: 1 }, { type: 'gripper', open: 50 }]);
+    const add = key => bomTable.querySelector(`.cart-add[data-part="${key}"]`).click();
+    add('nema17');
+    expect(cart.nema17 === 1 && Object.keys(cart).length === 1, '«+» у строки кладёт деталь в количестве строки');
+    add('nema17');
+    expect(cart.nema17 === 2, 'повторное «+» добавляет ещё');
+    const groups = bomGroups(), gi = groups.findIndex(g => g.parts.leadscrew); // группа схвата
+    bomTable.querySelector(`.cart-group[data-group="${gi}"]`).click();
+    expect(cart.nema14 === 1 && cart.leadscrew === 1 && cart.tmc2209 === 1 && cart.print === 1, '«+ секция» кладёт все детали секции');
+    swaps.tmc2209 = 'a4988'; updateBOM();
+    expect(!!bomTable.querySelector('.cart-add[data-part="a4988"]'), 'кнопка строки знает выбранную замену');
+    add('a4988');
+    expect(cart.a4988 === 1 && cart.tmc2209 === 1, 'в корзину идёт замена, прежняя строка остаётся');
+    delete swaps.tmc2209; updateBOM();
+    bomTable.querySelector('.cart-all').click();
+    expect(cart.esp32 === 1 && cart.psu === 1 && cart.nema17 === 3, '«+ всё» добавляет весь список поверх');
+    const row = key => cartTable.querySelector(`tr[data-part="${key}"]`);
+    row('nema17').querySelector('button[data-d="-1"]').click();
+    expect(cart.nema17 === 2, '«−» убавляет');
+    row('nema17').querySelector('button[data-d="1"]').click();
+    expect(cart.nema17 === 3, '«+» прибавляет');
+    row('a4988').querySelector('.cart-del').click();
+    expect(!cart.a4988 && !row('a4988'), '✕ убирает строку');
+    const sum = Object.entries(cart).reduce((s, [k, n]) => s + n * PARTS[k].price, 0);
+    expect(cartTable.querySelector('tr.total td.num').textContent === fmt$(sum), `итог корзины ${fmt$(sum)}`);
+    expect(cartSummary.textContent.includes(String(Object.keys(cart).length)), `сводка: ${cartSummary.textContent}`);
+    expect(cartText().split(String.fromCharCode(10)).pop().includes(fmt$(sum)), 'текст для заказа кончается итогом');
+    const order = cartRows().map(r => r.key), catalog = Object.keys(PARTS).filter(k => cart[k]);
+    expect(order.join() === catalog.join(), 'строки корзины — в порядке каталога');
+    let stored = null; try { stored = JSON.parse(localStorage.getItem('roboArmCart')); } catch (e) { stored = 'n/a'; }
+    expect(stored === 'n/a' || stored?.nema17 === 3, 'корзина сохранена в localStorage');
+    setArm([]);
+    expect(cart.nema17 === 3 && cartTable.querySelector('tr.total'), 'пустая рука не трогает корзину');
+    cartClear();
+    let cleared = null; try { cleared = localStorage.getItem('roboArmCart'); } catch (e) { cleared = null; }
+    expect(!Object.keys(cart).length && cleared === null && btnCartCopy.disabled, 'очистка: пусто, запись удалена, кнопки выключены');
   }
   /* ---------- обратная кинематика: солвер и перетаскивание мишени ---------- */
   if (SCEN === 'ik') await (async () => {

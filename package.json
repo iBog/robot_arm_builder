@@ -1,13 +1,16 @@
 {
   "name": "robo-arm-builder",
   "private": true,
-  "description": "Скрипты разработки. Само приложение — один файл index.html без сборки и зависимостей.",
+  "description": "Скрипты разработки. Приложение — index.html + src/ без сборки; node tools/bundle.mjs склеивает всё в один файл для деплоя.",
   "type": "module",
   "scripts": {
+    "bundle": "node tools/bundle.mjs",
     "check": "node tests/check.mjs",
     "test:codec": "node tests/codec.test.mjs",
-    "test:fast": "node tests/check.mjs && node tests/codec.test.mjs && node tests/run.mjs struct split build share golden",
-    "test": "node tests/check.mjs && node tests/codec.test.mjs && node tests/run.mjs",
+    "test:twin": "node tests/twin.test.mjs",
+    "twin": "node tools/twin-mcp.mjs",
+    "test:fast": "node tests/check.mjs && node tests/codec.test.mjs && node tests/twin.test.mjs && node tests/run.mjs struct split build share golden && node tests/run.mjs golden --bundle",
+    "test": "node tests/check.mjs && node tests/codec.test.mjs && node tests/twin.test.mjs && node tests/run.mjs",
     "schema": "node tools/schema.mjs",
     "release": "node tools/release.mjs"
   },

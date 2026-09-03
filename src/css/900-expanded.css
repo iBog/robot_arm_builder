@@ -1,0 +1,9 @@
+/* ---- Развёрнутый 3D-вид: видны только шапка и вьюпорт ---- */
+body.expanded {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "header"
+    "viewport";
+}
+body.expanded #addRow, body.expanded #sidebar { display: none; }

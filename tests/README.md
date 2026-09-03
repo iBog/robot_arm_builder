@@ -1,21 +1,27 @@
 # Тесты
 
 Проверки гоняются в headless Chrome на настоящей странице: копия `index.html`
-получает код сценария из `scenarios.js`, вставленный в модуль после старта
-(поэтому сценарию доступны все внутренние функции — `buildArm`, `challengeTick`,
-кодек и т.д.), и запускается с `--dump-dom`. Сценарий пишет строки в
+в `tests/out/` (пути на `../../src/`) с подменённым `src/js/900-main.js`, куда
+после старта вставлен код сценария из `scenarios.js` (поэтому сценарию доступны
+все внутренние функции — `buildArm`, `challengeTick`, кодек и т.д.), запускается
+с `--dump-dom`. Сценарий — обычный скрипт, top-level `await` в нём недопустим. Сценарий пишет строки в
 `<pre id="testlog">`, раннер печатает их; строки `FAIL`, `EXCEPTION`, `ERR` —
 провал.
 
 ```powershell
-node tests/check.mjs            # синтаксис JS-модуля (секунда)
+node tests/check.mjs            # список скриптов, 'use strict', синтаксис файлов и склейки (секунда)
 node tests/codec.test.mjs       # кодек ссылок, валидатор, schema.json — в node, без браузера (секунда)
+node tests/twin.test.mjs        # хаб двойника и MCP-сервер tools/twin-mcp.mjs — в node, без браузера (секунды)
 node tests/run.mjs              # все сценарии (~10 мин: солвер поз перебирает много рестартов)
 node tests/run.mjs struct split # только быстрые
 node tests/run.mjs golden --update   # перезаписать «золотой» снимок геометрии
 node tests/run.mjs mill --shot       # плюс скриншот в tests/out/
 node tests/run.mjs share --http      # страница с локального http-сервера (ветки для http(s))
+node tests/run.mjs golden --bundle   # тот же сценарий на склейке tools/bundle.mjs
 ```
+
+С `file://` браузер маскирует текст ошибок в подключённых скриптах как
+«Script error.» — за настоящим сообщением перезапустите сценарий с `--http`.
 
 Нужен Chrome (`CHROME=путь`, если он не в стандартном месте) и доступ в сеть:
 three.js грузится с CDN. Артефакты — в `tests/out/` (в .gitignore).
@@ -41,6 +47,8 @@ three.js грузится с CDN. Артефакты — в `tests/out/` (в .gi
 | `split` | Связность вокселей чушки: прямой и наклонный рез. |
 | `shot` | Стартовый вид режима заданий — для скриншота. |
 | `ik` | Обратная кинематика: солвер (достижимая, недостижимая, подпольная цель), перетаскивание мишени pointer-событиями с записью в журнал, тач-порог захвата мимо меша. |
+| `twin` | Двойник: команды move_all/set_joint/gripper/home/ik/get_state/get_arm/set_arm по каналу, ответы с тем же id, поза уходит в канал только при изменении, state от руки применяется при простое и не возвращается эхом, пересылка home другим каналам. |
+| `cart` | Корзина BOM: «+» у строки (в количестве строки, с учётом замены), «+ секция», «+ всё», ± и ✕ в корзине, итог, порядок каталога, localStorage, очистка. |
 | `debug` | Отладочный API `window.roboArm` под `?debug=1`. |
 | `urdf` | Печатает URDF трёх рук — для ручного diff при правке геометрии (`GEOM`). |
 
@@ -51,9 +59,10 @@ three.js грузится с CDN. Артефакты — в `tests/out/` (в .gi
 
 ## Чистые куски и schema.json
 
-Кодек ссылок, валидатор и реестр типов не трогают DOM и обёрнуты в `index.html`
-маркерами `/* @pure имя */ … /* @pure end */`. `tools/pure.mjs` вырезает их и
-выполняет в node, на этом построены `tests/codec.test.mjs` и генератор
+Кодек ссылок, валидатор и реестры типов/геометрии не трогают DOM и обёрнуты в
+`src/js/*.js` маркерами `/* @pure имя */ … /* @pure end */` (маркеры — внутри
+одного файла). `tools/pure.mjs` вырезает их из склейки `buildModule()`
+(`tools/bundle.mjs`) и выполняет в node, на этом построены `tests/codec.test.mjs` и генератор
 `tools/schema.mjs` (JSON Schema конфигурации руки → `schema.json`; после правки
 `TYPES` перегенерируйте, тест проверяет актуальность).
 
@@ -61,7 +70,7 @@ three.js грузится с CDN. Артефакты — в `tests/out/` (в .gi
 
 Откройте `index.html?debug=1` — в `window.roboArm` появятся: `components`,
 `config()`, `setArm(cfg)`, `setParam(i, key, v)` (с ограничением пола),
-`tip()`, `minY()`, `tick(now)`, `state()`, `challenge.{start, stop, goto, reset, data}`,
+`tip()`, `minY()`, `tick(now)`, `state()`, `challenge.{start, stop, goto, reset, data}`, `cart.{data, add, clear, text}`, `twin.{addLink, removeLink, handle, links, state}`,
 `share.{full, short, encode, decode, encodeStruct, decodeStruct}`, `setLang`,
 `setTheme`, а также `THREE`, `scene`, `camera`, `controls`, `renderer`. Этого
 хватает, чтобы агент или внешний скрипт управлял рукой из консоли, Playwright или

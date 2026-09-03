@@ -6,15 +6,19 @@
    --shot — сохранить скриншот сценария в tests/out/
    Требуется Chrome (переменная CHROME или стандартный путь) и доступ к CDN three.js.
 
-   Как это работает: копия index.html с кодом сценария, вставленным в модуль после
+   Как это работает: копия index.html в tests/out/ (ссылки на src/ перенаправлены),
+   в которой src/js/900-main.js подменён копией с кодом сценария, вставленным после
    старта (у него есть доступ ко всем внутренним функциям), открывается headless
    Chrome с --dump-dom; сценарий пишет строки в <pre id="testlog">, раннер их
-   печатает. Строка FAIL/EXCEPTION/ERR — провал, код выхода 1. */
+   печатает. Строка FAIL/EXCEPTION/ERR — провал, код выхода 1.
+   --bundle — то же на собранном одностраничнике (tools/bundle.mjs) вместо
+   модульной страницы: проверка, что сборка ничего не ломает. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import http from 'node:http';
+import { buildBundle, readIndex, root as projectRoot } from '../tools/bundle.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -41,9 +45,14 @@ function chromePath() {
   return p;
 }
 const CHROME = chromePath();
-const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/\r\n/g, '\n'); // рабочая копия может быть CRLF
+const MAIN = 'src/js/900-main.js';
+const mainSrc = fs.readFileSync(path.join(projectRoot, MAIN), 'utf8').replace(/\r\n/g, '\n');
 const anchor = 'renderPanel();\nif (fromLink) {';
-if (index.split(anchor).length !== 2) { console.error('якорь старта не найден в index.html'); process.exit(2); }
+if (mainSrc.split(anchor).length !== 2) { console.error(`якорь старта не найден в ${MAIN}`); process.exit(2); }
+const bundle = flags.has('--bundle') ? buildBundle() : null;
+if (bundle && bundle.split(anchor).length !== 2) { console.error('якорь старта не найден в сборке'); process.exit(2); }
+/* модульная страница: копия index.html рядом с тестовыми файлами, src/ — на два уровня выше */
+const page = readIndex().html.replace(/(href|src)="src\//g, '$1="../../src/').replace(/'src\/js\//g, "'../../src/js/");
 const goldenPath = path.join(here, 'golden.json');
 const golden = fs.existsSync(goldenPath) ? fs.readFileSync(goldenPath, 'utf8') : 'null';
 
@@ -78,9 +87,13 @@ function runChrome(args, timeout = 300000) {
 let failed = 0;
 for (const name of names) {
   const inject = scenarios.replace("'__SCEN__'", () => `'${name}'`).replace("'__GOLDEN__'", () => golden);
-  const html = index.replace(anchor, () => 'renderPanel();\n' + inject + '\nif (fromLink) {');
+  const withScen = src => src.replace(anchor, () => 'renderPanel();\n' + inject + '\nif (fromLink) {');
   const file = path.join(outDir, `test_${name}.html`);
-  fs.writeFileSync(file, html);
+  if (bundle) fs.writeFileSync(file, withScen(bundle));
+  else {
+    fs.writeFileSync(path.join(outDir, `main_${name}.js`), withScen(mainSrc));
+    fs.writeFileSync(file, page.replace(`'../../${MAIN}'`, () => `'main_${name}.js'`));
+  }
   const url = (server ? `http://127.0.0.1:${port}/tests/out/test_${name}.html` : pathToFileURL(file).href)
     + (name === 'debug' ? '?debug=1' : ''); // сценарий debug проверяет API под флагом
   /* сценарии синхронные: дамп DOM сразу после выполнения модуля; виртуальное время

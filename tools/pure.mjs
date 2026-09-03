@@ -1,19 +1,18 @@
-/* Чистые куски index.html (без DOM): реестр типов, кодек ссылок, валидатор.
-   В файле они обёрнуты маркерами `/* @pure <имя> *​/` … `/* @pure end *​/`.
-   loadPure() склеивает их в порядке файла и выполняет в песочнице node,
-   подставляя заглушки для локализации — так кодек и схему можно гонять
-   за секунды без браузера. Единственный файл проекта остаётся единственным. */
-import fs from 'node:fs';
-import path from 'node:path';
+/* Чистые куски модуля (без DOM): реестры типов и геометрии, кодек ссылок,
+   валидатор. В исходниках src/js/*.js они обёрнуты маркерами
+   `/* @pure <имя> *​/` … `/* @pure end *​/`. loadPure() склеивает их в порядке
+   модуля (по списку загрузчика index.html) и выполняет в песочнице node,
+   подставляя заглушки для локализации — так кодек и схему можно гонять за
+   секунды без браузера. */
 import vm from 'node:vm';
-import { fileURLToPath } from 'node:url';
+import { buildModule, root } from './bundle.mjs';
 
-export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export { root };
 
 export function pureSource() {
-  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const parts = [...html.matchAll(/\/\* @pure ([a-z]+) \*\/([\s\S]*?)\/\* @pure end \*\//g)];
-  if (!parts.length) throw new Error('маркеры @pure не найдены в index.html');
+  const { code } = buildModule();
+  const parts = [...code.matchAll(/\/\* @pure ([a-z]+) \*\/([\s\S]*?)\/\* @pure end \*\//g)];
+  if (!parts.length) throw new Error('маркеры @pure не найдены в src/js');
   return { names: parts.map(m => m[1]), code: parts.map(m => m[2]).join('\n') };
 }
 

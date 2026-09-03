@@ -3,8 +3,8 @@
 **English** · [Русский](README.ru.md)
 
 An interactive 3D constructor for robotic arms, built with [three.js](https://threejs.org/).
-The whole project is **a single file, `index.html`** — no server, no build step, no install:
-double-click it and it opens in your browser.
+No server, no build, no install: **double-click `index.html`** and it opens in your browser
+(a single-file bundle for hosting or sending along is one command away).
 
 ![Robo-Arm Builder](scr/screenshot.png)
 
@@ -142,22 +142,46 @@ built from primitives (cylinders, boxes, spheres), so there are no external mesh
 - **Pose.** URDF describes a model, not a pose, so the current slider values are listed in the
   header comment — copy them into a `joint_states` message if you need this exact posture.
 
+## Digital twin, external control, MCP
+
+The **Twin** tab links the 3D arm with the outside world. Every pose change (slider, IK drag,
+animation) is sent as `{"type":"move_all","angles":[…]}` + `{"type":"gripper","open":…}`, and
+incoming commands move the 3D arm — the JSON protocol of the physical ESP32 arm
+(`set_joint`, `move_all`, `gripper`, `home`, `emergency_stop`, `state`) plus page-level requests
+(`get_state`, `get_arm`, `set_arm`, `ik`, answered with the same `id`). Channels:
+
+- **WebSocket** — the arm's firmware over Wi-Fi (`ws://192.168.4.1/ws`) or the hub below;
+- **USB** — Web Serial (Chrome/Edge), one JSON per line;
+- **MCP** — `node tools/twin-mcp.mjs` starts a WebSocket hub on `ws://127.0.0.1:8765` (add `--arm ws://…`
+  to bridge the real arm) and an MCP server on stdio with tools `get_state`, `move_all`, `set_joint`,
+  `gripper`, `home`, `ik`, `get_arm`, `set_arm`, `stop`. `.mcp.json` registers it for Claude Code, so an
+  LLM agent can build and drive the arm — virtual and, through the bridge, real.
+
+Protocol reference, firmware sketches, a Python server, hub clients and MCP setup: [`docs/TWIN.md`](docs/TWIN.md).
+
+Joints J1…Jn are the pose parameters of the chain in order (the table in the tab shows the mapping);
+the arm's reported `state` is applied to the 3D model when "accept arm state" is on and the page is idle.
+
 ## For developers
 
-The whole app is one file, `index.html`, with no build step — keep it that way. Node is only
-needed for the checks:
+There is no build step. `index.html` holds the head, the markup and a small loader; styles live in
+`src/css/`, the code in `src/js/NNN-*.js` — plain scripts sharing one global scope, executed in list
+order (see [`src/README.md`](src/README.md)). Edit, press F5. Node is only needed for the checks and
+for the optional single-file bundle:
 
 ```
-node tests/check.mjs          # syntax of the JS module
+node tests/check.mjs          # script list vs src/, 'use strict', syntax of every file and of the whole
 node tests/codec.test.mjs     # link codec, validator and schema.json — in node, no browser
 node tests/run.mjs            # headless-Chrome scenarios: challenge physics, IK, replay, links…
-node tools/release.mjs X.Y.Z  # version into index.html, CHANGELOG section, git tag
+node tools/bundle.mjs         # everything inlined into dist/index.html — one file to host or send
+node tools/release.mjs X.Y.Z  # version into src/js/000-consts.js, CHANGELOG section, git tag
 ```
 
 Open `index.html?debug=1` to get `window.roboArm` — a small API (`setArm`, `setParam`, `tick`,
 `state`, `challenge`, `share`…) for driving the page from the console, Playwright or an agent.
-See [`tests/README.md`](tests/README.md), [`CODEC.md`](CODEC.md) for the link format and
-[`CHANGELOG.md`](CHANGELOG.md).
+See [`docs/`](docs/README.md): [`TWIN.md`](docs/TWIN.md) (WebSocket, Web Serial, MCP with examples),
+[`DEPLOY.md`](docs/DEPLOY.md), [`CODEC.md`](docs/CODEC.md) for the link format, [`ROADMAP.md`](docs/ROADMAP.md);
+also [`tests/README.md`](tests/README.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ## About the shopping list
 

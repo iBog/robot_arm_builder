@@ -3,8 +3,8 @@
 [English](README.md) · **Русский**
 
 Интерактивный 3D-конструктор роботизированных манипуляторов на [three.js](https://threejs.org/).
-Весь проект — **один файл `index.html`**: без сервера, без сборки, без установки,
-открывается двойным кликом в браузере.
+Без сервера, без сборки, без установки: **двойной клик по `index.html`** — и страница
+открыта в браузере (склейка в один файл для хостинга или пересылки — одна команда).
 
 ![Конструктор робо-руки](scr/screenshot-ru.png)
 
@@ -139,22 +139,46 @@
 - **Поза.** URDF описывает модель, а не позу, поэтому текущие значения слайдеров вынесены в
   комментарий-шапку: оттуда их можно перенести в `joint_states`.
 
+## Двойник, внешнее управление, MCP
+
+Вкладка **Двойник** связывает 3D-руку с внешним миром. Каждое изменение позы (слайдер, IK,
+анимация) уходит как `{"type":"move_all","angles":[…]}` + `{"type":"gripper","open":…}`, а входящие
+команды двигают 3D-руку — это JSON-протокол железной руки на ESP32 (`set_joint`, `move_all`,
+`gripper`, `home`, `emergency_stop`, `state`) плюс запросы к странице (`get_state`, `get_arm`,
+`set_arm`, `ik`, ответ с тем же `id`). Каналы:
+
+- **WebSocket** — прошивка руки по Wi-Fi (`ws://192.168.4.1/ws`) или хаб ниже;
+- **USB** — Web Serial (Chrome/Edge), по одному JSON в строке;
+- **MCP** — `node tools/twin-mcp.mjs` поднимает WebSocket-хаб на `ws://127.0.0.1:8765` (с `--arm ws://…`
+  мостит железную руку) и MCP-сервер по stdio с инструментами `get_state`, `move_all`, `set_joint`,
+  `gripper`, `home`, `ik`, `get_arm`, `set_arm`, `stop`. `.mcp.json` регистрирует его для Claude Code —
+  LLM-агент может собирать руку и управлять ею: виртуальной и, через мост, настоящей.
+
+Протокол, примеры прошивки, сервер на Python, клиенты хаба и настройка MCP: [`docs/TWIN.md`](docs/TWIN.md).
+
+Суставы J1…Jn — позные параметры цепочки по порядку (таблица во вкладке показывает соответствие);
+`state` от руки применяется к 3D-модели, когда включён приём и страница простаивает.
+
 ## Разработчикам
 
-Всё приложение — один файл `index.html` без сборки, и это осознанное ограничение. Node нужен
-только для проверок:
+Сборки нет. В `index.html` — шапка, разметка и маленький загрузчик; стили — в `src/css/`, код — в
+`src/js/NNN-*.js`: обычные скрипты с общей глобальной областью видимости, выполняются в порядке
+списка (см. [`src/README.md`](src/README.md)). Правка — F5. Node нужен только для проверок и
+необязательной склейки в один файл:
 
 ```
-node tests/check.mjs          # синтаксис JS-модуля
+node tests/check.mjs          # список скриптов против src/, 'use strict', синтаксис файлов и склейки
 node tests/codec.test.mjs     # кодек ссылок, валидатор и schema.json — в node, без браузера
 node tests/run.mjs            # сценарии в headless Chrome: физика заданий, ИК, повтор, ссылки…
-node tools/release.mjs X.Y.Z  # версия в index.html, раздел CHANGELOG, git-тег
+node tools/bundle.mjs         # всё в один dist/index.html — для хостинга или пересылки
+node tools/release.mjs X.Y.Z  # версия в src/js/000-consts.js, раздел CHANGELOG, git-тег
 ```
 
 Откройте `index.html?debug=1` — появится `window.roboArm`, небольшой API (`setArm`, `setParam`,
 `tick`, `state`, `challenge`, `share`…) для управления страницей из консоли, Playwright или агента.
-Подробнее: [`tests/README.md`](tests/README.md), формат ссылок — [`CODEC.md`](CODEC.md), история —
-[`CHANGELOG.md`](CHANGELOG.md).
+Подробнее — [`docs/`](docs/README.md): [`TWIN.md`](docs/TWIN.md) (WebSocket, Web Serial, MCP с примерами),
+[`DEPLOY.md`](docs/DEPLOY.md), формат ссылок — [`CODEC.md`](docs/CODEC.md), планы — [`ROADMAP.md`](docs/ROADMAP.md);
+тесты — [`tests/README.md`](tests/README.md), история — [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Про список закупки
 

@@ -1,0 +1,43 @@
+/* Инструменты 3D-окна: переключатель анимации + ссылка — левый верхний угол */
+#vpTools {
+  position: absolute; left: 12px; top: 10px; z-index: 2;
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+#animToggle, #btnShare, #btnUndo, #btnHelp, #btnIK {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--overlay); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 13px;
+  font: 600 13.5px/1.45 "Segoe UI", system-ui, sans-serif;
+  color: var(--text); cursor: pointer;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+#animToggle:hover, #btnShare:hover, #btnUndo:hover, #btnHelp:hover, #btnIK:hover { border-color: var(--accent); }
+#btnIK.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+#btnHelp { font-weight: 800; padding: 7px 12px; }
+/* долгое нажатие по «Ссылке»: без выделения текста и системного меню */
+#btnShare {
+  user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; touch-action: manipulation;
+}
+#animToggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+#btnShare.done { border-color: var(--ok); color: var(--ok); }
+#btnUndo[hidden] { display: none; } /* display:flex перебивает атрибут hidden */
+
+/* Управление камерой — правый нижний угол 3D-окна, компактно */
+#camTools {
+  position: absolute; right: 12px; bottom: 10px; z-index: 2;
+  display: flex; gap: 8px;
+}
+#fitToggle, #btnExpand, #btnPanel {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--overlay); border: 1px solid var(--border);
+  border-radius: 7px; padding: 5px 9px;
+  font: 600 12px/1.4 "Segoe UI", system-ui, sans-serif;
+  color: var(--text); cursor: pointer;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+#fitToggle input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; margin: 0; }
+#fitToggle:hover, #btnExpand:hover, #btnPanel:hover { border-color: var(--accent); }
+#fitToggle.on, #btnExpand.on, #btnPanel.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
