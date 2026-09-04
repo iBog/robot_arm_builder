@@ -28,6 +28,28 @@
 .twin-row button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .twin-row label { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
 .twin-row label input { accent-color: var(--accent); margin: 0; }
+#twinName { flex: 1; }
+#twinNameLbl { white-space: nowrap; }
+#twinPeers { font-size: 11.5px; }
+/* руку держит сосед: панель и кнопки заблокированы, над 3D-видом — плашка с именем и остатком замка */
+body.twinLocked #addRow, body.twinLocked #components, body.twinLocked #genRow,
+body.twinLocked #btnApply, body.twinLocked #btnUndo, body.twinLocked #btnTwinHome { pointer-events: none; opacity: .55; }
+#twinLockHint {
+  position: absolute; top: 58px; left: 12px; z-index: 3; /* как #tutHint: ниже ряда кнопок #vpTools */
+  max-width: 320px;
+  background: var(--panel2); color: var(--text);
+  border: 1px solid var(--ok, #3fb950); border-radius: 8px;
+  padding: 8px 11px; font-size: 12.5px; line-height: 1.45;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+  font-variant-numeric: tabular-nums;
+}
+#twinLockHint[hidden] { display: none; }
+#twinLockHint::before {
+  content: ''; position: absolute; top: -7px; left: 20px;
+  width: 12px; height: 12px; background: var(--panel2);
+  border-left: 1px solid var(--ok, #3fb950); border-top: 1px solid var(--ok, #3fb950);
+  transform: rotate(45deg);
+}
 #twinAxes { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 #twinAxes th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 4px; border-bottom: 1px solid var(--border); }
 #twinAxes td { padding: 3px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
@@ -41,7 +63,7 @@
 #btnTwinLogClear { font: inherit; font-size: 11px; padding: 2px 8px; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 4px; }
 #btnTwinLogClear:hover { color: var(--accent); border-color: var(--accent); }
 #twinLog {
-  margin: 0; max-height: 160px; overflow: auto; font-size: 10.5px; line-height: 1.35;
+  margin: 0; height: 220px; flex: 0 0 auto; overflow: auto; font-size: 10.5px; line-height: 1.35; /* фиксированная высота: иначе флекс-колонка сжимает журнал в полоску */
   white-space: pre-wrap; word-break: break-all; color: var(--muted);
   background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
 }

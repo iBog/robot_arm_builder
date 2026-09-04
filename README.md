@@ -166,6 +166,9 @@ incoming commands move the 3D arm — the JSON protocol of the physical ESP32 ar
   to bridge the real arm) and an MCP server on stdio with tools `get_state`, `move_all`, `set_joint`,
   `gripper`, `home`, `ik`, `get_arm`, `set_arm`, `stop`. `.mcp.json` registers it for Claude Code, so an
   LLM agent can build and drive the arm — virtual and, through the bridge, real.
+- **LAN, several pages** — `node tools/twin-mcp.mjs --serve` also hands the page out over the local
+  network (`http://<your-ip>:8765/`); every browser or computer that opens it shares one arm — structure
+  and pose. Whoever moves first holds the arm, the others mirror it and can take over 2 s after the last action.
 
 Protocol reference, firmware sketches, a Python server, hub clients and MCP setup: [`docs/TWIN.md`](docs/TWIN.md).
 

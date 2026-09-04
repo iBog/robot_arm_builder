@@ -154,10 +154,23 @@ const STR = {
   twinTitle:  { en: '🔗 Twin — real arm & external control', ru: '🔗 Двойник — железная рука и внешнее управление' },
   twinNote:   { en: 'The page connects to the physical arm (ESP32 firmware over Wi-Fi, ws://192.168.4.1/ws) or to the hub '
                   + '«node tools/twin-mcp.mjs» (ws://127.0.0.1:8765) that bridges the arm and lets an MCP agent or a script drive it. '
-                  + 'USB: Web Serial, one JSON per line. Every pose change goes out as move_all + gripper; incoming commands move the 3D arm.',
+                  + 'USB: Web Serial, one JSON per line. Every pose change goes out as move_all + gripper; incoming commands move the 3D arm. '
+                  + 'Several pages on one hub share one arm («node tools/twin-mcp.mjs --serve» hands the page out over the LAN): '
+                  + 'whoever moves first holds it, others mirror and take over 2 s after the last action.',
                 ru: 'Страница подключается к железной руке (прошивка ESP32 по Wi-Fi, ws://192.168.4.1/ws) или к хабу '
                   + '«node tools/twin-mcp.mjs» (ws://127.0.0.1:8765), который мостит руку и даёт управлять ею MCP-агенту или скрипту. '
-                  + 'USB: Web Serial, по одному JSON в строке. Каждое изменение позы уходит как move_all + gripper; входящие команды двигают 3D-руку.' },
+                  + 'USB: Web Serial, по одному JSON в строке. Каждое изменение позы уходит как move_all + gripper; входящие команды двигают 3D-руку. '
+                  + 'Несколько страниц на одном хабе делят одну руку («node tools/twin-mcp.mjs --serve» раздаёт страницу по локальной сети): '
+                  + 'кто первый начал двигать, тот держит её, остальные зеркалят и могут перехватить через 2 с после последнего действия.' },
+  twinNameLbl:    { en: 'Your name:',                  ru: 'Ваше имя:' },
+  twinGuest:      { en: id => `Guest-${id}`,           ru: id => `Гость-${id}` },
+  twinMe:         { en: name => `${name} (you)`,      ru: name => `${name} (вы)` },
+  twinPeersRow:   { en: list => `Pages: ${list}`,     ru: list => `Страницы: ${list}` },
+  twinPeersNone:  { en: name => `No other pages on this hub — you are ${name}.`,
+                    ru: name => `Других страниц на хабе нет — вы ${name}.` },
+  twinLockedBy:   { en: (name, s) => `🔒 ${name} is driving the arm · free in ${s} s`,
+                    ru: (name, s) => `🔒 Рукой управляет ${name} · свободна через ${s} с` },
+  twinBusy:       { en: name => `busy: ${name} holds the arm`, ru: name => `занято: руку держит ${name}` },
   twinConnect:    { en: 'Connect',                     ru: 'Подключить' },
   twinDisconnect: { en: 'Disconnect',                  ru: 'Отключить' },
   twinConnecting: { en: 'connecting…',                 ru: 'подключение…' },

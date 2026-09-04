@@ -2,7 +2,8 @@
 /* Хаб двойника и MCP-сервер без браузера: node tests/twin.test.mjs
    Запускает tools/twin-mcp.mjs на случайном порту, подключается к хабу как «страница»
    (встроенный WebSocket node ≥ 22) и гоняет MCP по stdio: initialize, tools/list,
-   tools/call get_state / move_all / set_arm, ошибка без страницы. */
+   tools/call get_state / move_all / set_arm, ошибка без страницы; peer_left при обрыве
+   страницы; --serve: страница отдаётся по http, корень ведёт на ?twin=auto. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -91,9 +92,56 @@ await test('хаб пересылает сообщения между клиен
   ws2.close();
 });
 
+await test('страница с peer id обрывается — остальным уходит peer_left', async () => {
+  const ws3 = new WebSocket(`ws://127.0.0.1:${port}`);
+  await new Promise((ok, bad) => { ws3.onopen = ok; ws3.onerror = bad; });
+  ws3.send(JSON.stringify({ type: 'hello', source: '3d', peer: 'p3', name: 'Three' }));
+  await new Promise(r => setTimeout(r, 100));
+  assert.ok(got.some(m => m.type === 'hello' && m.peer === 'p3'), 'hello дошёл до страницы');
+  const k = got.length;
+  ws3.close();
+  const m = await new Promise((ok, bad) => {
+    const t = setTimeout(() => { clearInterval(iv); bad(new Error('нет peer_left')); }, 2000);
+    const iv = setInterval(() => { const x = got.slice(k).find(y => y.type === 'peer_left'); if (x) { clearInterval(iv); clearTimeout(t); ok(x); } }, 20);
+  });
+  assert.equal(m.peer, 'p3');
+  assert.equal(m.name, 'Three');
+  assert.equal(m.source, '3d');
+});
+
 ws.close();
 srv.stdin.end();
 await new Promise(r => setTimeout(r, 100));
 srv.kill();
+/* --serve: отдельный хаб раздаёт склейку страницы */
+const srv2 = spawn(process.execPath, [path.join(root, 'tools', 'twin-mcp.mjs'), '--port', '0', '--serve', '--host', '127.0.0.1'], { stdio: ['pipe', 'pipe', 'pipe'] });
+let err2 = '';
+const port2 = await new Promise((ok, bad) => {
+  srv2.stderr.on('data', d => { err2 += String(d); const m = /ws:\/\/127\.0\.0\.1:(\d+)/.exec(err2); if (m) ok(+m[1]); });
+  srv2.on('exit', c => bad(new Error('serve exited ' + c)));
+});
+await new Promise(r => setTimeout(r, 100));
+await test('--serve: корень ведёт на ?twin=auto, страница отдаётся целиком, исходники — нет', async () => {
+  const r0 = await fetch(`http://127.0.0.1:${port2}/`, { redirect: 'manual' });
+  assert.equal(r0.status, 302);
+  assert.equal(r0.headers.get('location'), '/?twin=auto');
+  const r1 = await fetch(`http://127.0.0.1:${port2}/?twin=auto`);
+  assert.equal(r1.status, 200);
+  const html = await r1.text();
+  assert.match(html, /<title>/);
+  assert.match(html, /twinLockOther/, 'склейка содержит модуль двойника');
+  assert.ok(!/src\/js\/540-twin\.js/.test(html), 'страница одним файлом, без ссылок на src/');
+  const r2 = await fetch(`http://127.0.0.1:${port2}/src/js/540-twin.js`);
+  assert.equal(r2.status, 404, 'исходники не раздаются');
+  assert.ok(err2.includes(`page: http://127.0.0.1:${port2}/?twin=auto`), 'ссылка напечатана в консоль');
+});
+await test('--serve: WebSocket на том же порту', async () => {
+  const w = new WebSocket(`ws://127.0.0.1:${port2}`);
+  await new Promise((ok, bad) => { w.onopen = ok; w.onerror = bad; });
+  w.close();
+});
+srv2.stdin.end();
+await new Promise(r => setTimeout(r, 100));
+srv2.kill();
 console.log(`${n} проверок прошли${failed ? `, ${failed} упали` : ''}`);
 process.exit(failed ? 1 : 0);

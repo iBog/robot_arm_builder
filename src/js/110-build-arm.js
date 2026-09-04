@@ -617,6 +617,7 @@ function buildArm() {
   updateJSONView();
   updateURDFView();
   updateBOM();
+  twinArmChanged(); // состав — соседним страницам двойника (только если изменился)
   invalidate();
   if (components.length) startHint.hidden = true; // рука уже не пуста
 }

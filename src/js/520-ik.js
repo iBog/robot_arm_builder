@@ -166,7 +166,7 @@ function ikHit(e) {
 }
 
 renderer.domElement.addEventListener('pointerdown', e => {
-  if (!ikOn || chal?.replay || !ikHit(e)) return;
+  if (!ikOn || chal?.replay || twinLockOther() || !ikHit(e)) return; // при чужом замке двойника мишень не тянется
   e.preventDefault();
   controls.enabled = false;
   renderer.domElement.setPointerCapture(e.pointerId);

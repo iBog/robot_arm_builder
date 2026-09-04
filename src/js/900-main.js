@@ -32,7 +32,8 @@ if (urlParam('debug') !== null) {
     share: { full: shareURL, short: structShareURL, encode: encodeArmCode, decode: decodeArmCode,
              encodeStruct: encodeStructCode, decodeStruct: decodeStructCode },
     cart: { get data() { return { ...cart }; }, add: cartAdd, clear: cartClear, text: cartText },
-    twin: { addLink: twinAddLink, removeLink: twinRemoveLink, handle: twinHandle, get links() { return twin.links; }, get state() { return twinStateMessage(); } },
+    twin: { addLink: twinAddLink, removeLink: twinRemoveLink, handle: twinHandle, tick: twinTick, get links() { return twin.links; }, get state() { return twinStateMessage(); },
+            get me() { return twin.me; }, get peers() { return [...twin.peers]; }, get lock() { return twin.lock; } },
     setLang, setTheme, setStyle, THREE, scene, camera, controls, renderer,
   };
 }

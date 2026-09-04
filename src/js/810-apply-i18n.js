@@ -57,6 +57,7 @@ function applyI18n() {
   document.getElementById('twinNote').textContent = t('twinNote');
   document.getElementById('twinSendLbl').textContent = t('twinSend');
   document.getElementById('twinRecvLbl').textContent = t('twinRecv');
+  document.getElementById('twinNameLbl').textContent = t('twinNameLbl');
   document.getElementById('btnTwinHome').textContent = t('twinHome');
   document.getElementById('btnTwinStop').textContent = t('twinStop');
   document.getElementById('twinProto').textContent = t('twinProto');

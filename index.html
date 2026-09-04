@@ -92,6 +92,7 @@
   </div>
   <div id="tutHint" hidden></div>
   <div id="ikHint" hidden></div>
+  <div id="twinLockHint" hidden></div>
   <div id="camTools">
     <label id="fitToggle"><input type="checkbox" id="chkFit" checked><span id="fitLbl">Fit</span></label>
     <button id="btnPanel">▤</button>
@@ -161,6 +162,10 @@
         <input type="text" id="twinUrl" spellcheck="false" placeholder="ws://192.168.4.1/ws">
         <button id="btnTwinWs"></button>
       </div>
+      <div class="twin-row">
+        <span class="note" id="twinNameLbl"></span>
+        <input type="text" id="twinName" spellcheck="false" maxlength="24">
+      </div>
       <div class="twin-row" id="twinSerialRow">
         <input type="number" id="twinBaud" min="300" step="100" title="baud">
         <button id="btnTwinSerial"></button>
@@ -173,6 +178,7 @@
         <button id="btnTwinHome"></button>
         <button id="btnTwinStop"></button>
       </div>
+      <div class="note" id="twinPeers"></div>
       <table id="twinAxes"></table>
       <div class="note" id="twinProto"></div>
       <div id="twinLogHead"><span class="note" id="twinLogTitle"></span><button id="btnTwinLogClear"></button></div>

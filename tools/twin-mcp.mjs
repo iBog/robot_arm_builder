@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Хаб двойника + MCP-сервер: node tools/twin-mcp.mjs [--port 8765] [--arm ws://192.168.4.1/ws]
+/* Хаб двойника + MCP-сервер: node tools/twin-mcp.mjs [--port 8765] [--arm ws://192.168.4.1/ws] [--serve] [--host 0.0.0.0]
    Без зависимостей (WebSocket-сервер и MCP по stdio написаны здесь же).
 
    1. WebSocket-хаб на 127.0.0.1:PORT — к нему подключается страница (вкладка «Двойник»,
@@ -7,7 +7,15 @@
       уходят всем остальным. С --arm хаб сам подключается к железной руке
       и мостит: всё от страницы уходит в руку (кроме её ответов source:'3d'), всё от руки —
       во все страницы. Так 3D-рука и железная двигаются вместе даже без прямого Wi-Fi/USB.
-   2. MCP-сервер (JSON-RPC 2.0 по stdio, одно сообщение на строку) — инструменты для агента
+      Несколько страниц на одном хабе делят одну руку (замок — на страницах, см.
+      src/js/540-twin.js); хаб запоминает peer id каждой страницы и при обрыве сообщает
+      остальным peer_left.
+   2. --serve: хаб раздаёт и саму страницу — склейку index.html + src/ (tools/bundle.mjs,
+      собирается в памяти при старте) по http://<адрес>:PORT/ — и слушает все интерфейсы,
+      чтобы другой компьютер в локальной сети открыл ссылку и подключился к этому же хабу
+      сам (страница читает ?twin=auto; корень без параметров перенаправляет на него).
+      --host задаёт адрес явно (по умолчанию 127.0.0.1, с --serve — 0.0.0.0).
+   3. MCP-сервер (JSON-RPC 2.0 по stdio, одно сообщение на строку) — инструменты для агента
       (Claude Code через .mcp.json, любой другой MCP-клиент): get_state, move_all, set_joint,
       gripper, home, ik, get_arm, set_arm, stop. Каждый инструмент шлёт команду странице
       и возвращает её ответ (после движения — свежий get_state).
@@ -17,6 +25,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,8 +33,34 @@ const args = process.argv.slice(2);
 const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : def; };
 const PORT = +opt('--port', 8765);
 const ARM_URL = opt('--arm', null);
-const VERSION = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version;
+const SERVE = args.includes('--serve');
+const HOST = opt('--host', SERVE ? '0.0.0.0' : '127.0.0.1');
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const logErr = (...a) => process.stderr.write(a.join(' ') + '\n');
+
+/* ---------- --serve: страница одним файлом из памяти + картинки scr/ ---------- */
+let pageHtml = null;
+if (SERVE) {
+  const { buildBundle } = await import('./bundle.mjs');
+  pageHtml = buildBundle();
+}
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+function servePage(req, res) {
+  const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    if (!url.search) { res.writeHead(302, { Location: '/?twin=auto' }); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.end(pageHtml); return;
+  }
+  const m = /^\/scr\/([\w.-]+)$/.exec(url.pathname); // og-картинка и иконка из <head>
+  const file = m && path.join(root, 'scr', m[1]);
+  if (file && fs.existsSync(file)) {
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    fs.createReadStream(file).pipe(res); return;
+  }
+  res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found');
+}
 
 /* ---------- минимальный WebSocket-сервер (RFC 6455: текстовые кадры, ping/pong, close) ---------- */
 const pages = new Set(); // сокеты страниц (и любых других клиентов хаба)
@@ -65,27 +100,36 @@ function wsParse(sock, state, onText) {
   }
 }
 
-const server = http.createServer((req, res) => { res.writeHead(426, { 'Content-Type': 'text/plain' }); res.end('Robo-Arm twin hub: WebSocket only'); });
+const server = http.createServer((req, res) => {
+  if (pageHtml) servePage(req, res);
+  else { res.writeHead(426, { 'Content-Type': 'text/plain' }); res.end('Robo-Arm twin hub: WebSocket only (start with --serve to get the page)'); }
+});
 server.on('upgrade', (req, sock) => {
   const key = req.headers['sec-websocket-key'];
   if (!key || !/websocket/i.test(req.headers.upgrade || '')) { sock.destroy(); return; }
   sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
     + `Sec-WebSocket-Accept: ${wsAccept(key)}\r\n\r\n`);
-  const client = { sock, send: text => sock.write(wsFrame(text)) };
+  const client = { sock, peer: null, name: null, send: text => sock.write(wsFrame(text)) };
   const state = { buf: Buffer.alloc(0), frag: '' };
   pages.add(client);
   logErr(`page connected (${pages.size})`);
   sock.on('data', chunk => { state.buf = Buffer.concat([state.buf, chunk]); wsParse(sock, state, text => onPageMessage(text, client)); });
-  const bye = () => { if (pages.delete(client)) logErr(`page disconnected (${pages.size})`); };
+  const bye = () => {
+    if (!pages.delete(client)) return;
+    logErr(`page disconnected (${pages.size})${client.name ? `: ${client.name}` : ''}`);
+    /* страница представилась peer id — остальным сообщить, что она выбыла (её замок снимается) */
+    if (client.peer) toPages({ type: 'peer_left', source: '3d', peer: client.peer, name: client.name });
+  };
   sock.on('close', bye); sock.on('error', bye); sock.on('end', bye);
 });
 
 /* сообщение от клиента хаба: ответ на запрос MCP (по id), остальным клиентам (страницам,
-   скриптам) — как есть, железу — всё, кроме ответов страницы (source:'3d') */
+   скриптам) — как есть, железу — всё, кроме сообщений страниц (source:'3d') */
 function onPageMessage(text, client) {
   let msg = null;
   try { msg = JSON.parse(text); } catch { /* не JSON — пусть уйдёт как есть */ }
   if (msg?.id !== undefined && waiters.has(msg.id)) { waiters.get(msg.id)(msg); waiters.delete(msg.id); }
+  if (typeof msg?.peer === 'string') { client.peer = msg.peer; if (msg.name) client.name = String(msg.name); }
   for (const p of pages) if (p !== client) p.send(text);
   if (arm && arm.readyState === 1 && msg?.source !== '3d') arm.send(text);
   if (!mcpMode) process.stdout.write(text + '\n');
@@ -175,8 +219,18 @@ async function onRpc(req) {
   } catch (e) { fail(-32603, e.message); }
 }
 
-server.listen(PORT, '127.0.0.1', () => {
-  logErr(`hub ws://127.0.0.1:${server.address().port}${ARM_URL ? ` ⇄ arm ${ARM_URL}` : ''}${mcpMode ? ' · MCP on stdio' : ' · type JSON lines to send'}`);
+/* адреса, по которым страницу откроют с других машин: IPv4 всех внешних интерфейсов */
+function lanAddresses() {
+  return Object.values(os.networkInterfaces()).flat().filter(a => a.family === 'IPv4' && !a.internal).map(a => a.address);
+}
+
+server.listen(PORT, HOST, () => {
+  const port = server.address().port;
+  logErr(`hub ws://127.0.0.1:${port}${ARM_URL ? ` ⇄ arm ${ARM_URL}` : ''}${mcpMode ? ' · MCP on stdio' : ' · type JSON lines to send'}`);
+  if (SERVE) {
+    const hosts = HOST === '0.0.0.0' || HOST === '::' ? ['127.0.0.1', ...lanAddresses()] : [HOST];
+    logErr('page: ' + hosts.map(h => `http://${h}:${port}/?twin=auto`).join('  '));
+  }
   connectArm();
 });
 readline.createInterface({ input: process.stdin, terminal: false }).on('line', line => {

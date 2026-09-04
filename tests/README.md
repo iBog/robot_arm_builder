@@ -11,7 +11,7 @@
 ```powershell
 node tests/check.mjs            # список скриптов, 'use strict', синтаксис файлов и склейки (секунда)
 node tests/codec.test.mjs       # кодек ссылок, валидатор, schema.json — в node, без браузера (секунда)
-node tests/twin.test.mjs        # хаб двойника и MCP-сервер tools/twin-mcp.mjs — в node, без браузера (секунды)
+node tests/twin.test.mjs        # хаб двойника и MCP-сервер tools/twin-mcp.mjs — в node, без браузера (секунды); peer_left, --serve
 node tests/run.mjs              # все сценарии (~10 мин: солвер поз перебирает много рестартов)
 node tests/run.mjs struct split # только быстрые
 node tests/run.mjs golden --update   # перезаписать «золотой» снимок геометрии
@@ -48,7 +48,7 @@ three.js грузится с CDN. Артефакты — в `tests/out/` (в .gi
 | `shot` | Стартовый вид режима заданий — для скриншота. |
 | `ik` | Обратная кинематика: солвер (достижимая, недостижимая, подпольная цель), перетаскивание мишени pointer-событиями с записью в журнал, тач-порог захвата мимо меша. |
 | `style` | Стили деталей (каркас / гладкий / корпус): сборка всех типов, капсулы столкновений, пол, масса печати в BOM растёт у скруглённых стилей, кинематика не меняется, стиль в ссылке. |
-| `twin` | Двойник: команды move_all/set_joint/gripper/home/ik/get_state/get_arm/set_arm по каналу, ответы с тем же id, поза уходит в канал только при изменении, state от руки применяется при простое и не возвращается эхом, пересылка home другим каналам. |
+| `twin` | Двойник: команды move_all/set_joint/gripper/home/ik/get_state/get_arm/set_arm по каналу, ответы с тем же id, поза уходит в канал только при изменении, state от руки применяется при простое и не возвращается эхом, пересылка home другим каналам; соседние страницы: hello → peer с составом, замок на 2 с с плашкой и блокировкой панели, гонка по peer id, состав arm принимается и не уходит обратно, peer_left снимает замок, новичок принимает состав комнаты, одновременный вход. |
 | `cart` | Корзина BOM: «+» у строки (в количестве строки, с учётом замены), «+ секция», «+ всё», ± и ✕ в корзине, итог, порядок каталога, localStorage, очистка. |
 | `debug` | Отладочный API `window.roboArm` под `?debug=1`. |
 | `urdf` | Печатает URDF трёх рук — для ручного diff при правке геометрии (`GEOM`). |
@@ -71,7 +71,7 @@ three.js грузится с CDN. Артефакты — в `tests/out/` (в .gi
 
 Откройте `index.html?debug=1` — в `window.roboArm` появятся: `components`,
 `config()`, `setArm(cfg)`, `setParam(i, key, v)` (с ограничением пола),
-`tip()`, `minY()`, `tick(now)`, `state()`, `challenge.{start, stop, goto, reset, data}`, `cart.{data, add, clear, text}`, `twin.{addLink, removeLink, handle, links, state}`,
+`tip()`, `minY()`, `tick(now)`, `state()`, `challenge.{start, stop, goto, reset, data}`, `cart.{data, add, clear, text}`, `twin.{addLink, removeLink, handle, tick, links, state, me, peers, lock}`,
 `share.{full, short, encode, decode, encodeStruct, decodeStruct}`, `setLang`,
 `setTheme`, а также `THREE`, `scene`, `camera`, `controls`, `renderer`. Этого
 хватает, чтобы агент или внешний скрипт управлял рукой из консоли, Playwright или
